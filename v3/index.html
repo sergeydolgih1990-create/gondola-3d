@@ -62,7 +62,7 @@
 
   <div class="stage">
     <canvas id="c"></canvas>
-    <div class="hint">тяните мышью — поворот · колесо — масштаб</div>
+    <div class="hint">тяните — поворот · колесо или два пальца — масштаб</div>
   </div>
 
   <div class="row" role="group" aria-label="Ракурс">
@@ -75,10 +75,11 @@
     <button type="button" data-view="stern">корма крупно</button>
   </div>
 
-  <div class="row" role="group" aria-label="Дерево" id="woodRow">
-    <span class="label">Дерево</span>
-    <button type="button" data-wood="light">светлое</button>
+  <div class="row" role="group" aria-label="Цвет" id="woodRow">
+    <span class="label">Цвет</span>
+    <button type="button" data-wood="light">светлое дерево</button>
     <button type="button" data-wood="dark">морёный дуб</button>
+    <button type="button" data-wood="gray">серый</button>
   </div>
 
   <div class="toggles">
@@ -123,7 +124,7 @@
   grid.rotation.x = Math.PI / 2; grid.material.transparent = true; grid.material.opacity = 0.28; scene.add(grid);
 
   // цвета по роли детали; дерево переключается кнопками
-  var ДЕРЕВО = { light: [0xd2ae80, 0.62], dark: [0x3e2c20, 0.55] };
+  var ДЕРЕВО = { light: [0xd2ae80, 0.62], dark: [0x3e2c20, 0.55], gray: [0xa3a7aa, 0.7] };   // серый — оценить форму без цвета
   var РОЛИ = { "латунь": [0xc9a24a, 0.32, 0.55], "металлостикер": [0xd9d6cf, 0.3, 0.4] };
   var дерево = "light";
   function материал(ч) {
@@ -236,24 +237,65 @@
       азимут = r[0]; высота = r[1]; дистанция = r[2];
       var d = ВАРИАНТЫ[текущий];
       цельКрупно = r[3] && d["точки"] ? d["точки"][r[3]] : null;
+      сдвиг.set(0, 0, 0);
       document.getElementById("spin").checked = false;
     });
   });
 
-  var drag = null;
-  function point(e) { var t = e.touches ? e.touches[0] : e; return { x: t.clientX, y: t.clientY }; }
-  canvas.addEventListener("pointerdown", function (e) { drag = point(e); canvas.setPointerCapture(e.pointerId); });
+  // один палец или мышь — поворот; два пальца — масштаб (щипок); колесо — масштаб
+  var drag = null, пальцы = {}, щипок = null, середина = null;
+  var сдвиг = new THREE.Vector3();          // сдвиг цели двумя пальцами; кнопки ракурсов его сбрасывают
+  var ДИСТ_МИН = 12, ДИСТ_МАКС = 900;
+  function point(e) { return { x: e.clientX, y: e.clientY }; }
+  function числоПальцев() { return Object.keys(пальцы).length; }
+  function расстояниеПальцев() {
+    var k = Object.keys(пальцы), a = пальцы[k[0]], b = пальцы[k[1]];
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  }
+  function серединаПальцев() {
+    var k = Object.keys(пальцы), a = пальцы[k[0]], b = пальцы[k[1]];
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  }
+  var вправо = new THREE.Vector3(), вверх = new THREE.Vector3();
+  function сдвинуть(dx, dy) {
+    var h = canvas.clientHeight || 1;
+    var мир = 2 * camera.position.distanceTo(цель) * Math.tan(camera.fov * Math.PI / 360) / h;
+    вправо.setFromMatrixColumn(camera.matrix, 0); вверх.setFromMatrixColumn(camera.matrix, 1);
+    сдвиг.addScaledVector(вправо, -dx * мир).addScaledVector(вверх, dy * мир);
+  }
+  canvas.addEventListener("pointerdown", function (e) {
+    пальцы[e.pointerId] = point(e);
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* указатель уже отпущен */ }
+    if (числоПальцев() === 2) { щипок = расстояниеПальцев(); середина = серединаПальцев(); drag = null; }
+    else if (числоПальцев() === 1) { drag = point(e); }
+    document.getElementById("spin").checked = false;
+  });
   canvas.addEventListener("pointermove", function (e) {
-    if (!drag) return;
+    if (!(e.pointerId in пальцы)) return;
     var p = point(e);
+    пальцы[e.pointerId] = p;
+    if (числоПальцев() >= 2) {
+      var d = расстояниеПальцев(), m = серединаПальцев();
+      if (щипок && d > 0) дистанция = Math.max(ДИСТ_МИН, Math.min(ДИСТ_МАКС, дистанция * щипок / d));
+      if (середина) сдвинуть(m.x - середина.x, m.y - середина.y);
+      щипок = d; середина = m;
+      return;
+    }
+    if (!drag) return;
     азимут -= (p.x - drag.x) * 0.008;
     высота = Math.max(-1.2, Math.min(1.55, высота + (p.y - drag.y) * 0.006));
     drag = p;
   });
-  ["pointerup", "pointercancel", "pointerleave"].forEach(function (ev) { canvas.addEventListener(ev, function () { drag = null; }); });
+  function отпустить(e) {
+    delete пальцы[e.pointerId];
+    щипок = null; середина = null;
+    var k = Object.keys(пальцы);
+    drag = k.length === 1 ? пальцы[k[0]] : null;
+  }
+  ["pointerup", "pointercancel"].forEach(function (ev) { canvas.addEventListener(ev, отпустить); });
   canvas.addEventListener("wheel", function (e) {
     e.preventDefault();
-    дистанция = Math.max(40, Math.min(900, дистанция * (1 + Math.sign(e.deltaY) * 0.1)));
+    дистанция = Math.max(ДИСТ_МИН, Math.min(ДИСТ_МАКС, дистанция * (1 + Math.sign(e.deltaY) * 0.1)));
   }, { passive: false });
 
   function resize() {
@@ -269,7 +311,7 @@
     resize();
     if (document.getElementById("spin").checked && !reduced) азимут += 0.003;
     var c = цельКрупно || центр;
-    цель.set(c[0], c[1], c[2]);
+    цель.set(c[0], c[1], c[2]).add(сдвиг);
     // узкий экран (телефон): длинная лодка не влезает по ширине — камера отходит дальше
     var дист = дистанция * Math.max(1, 1.5 / camera.aspect);
     camera.position.set(цель.x + дист * Math.cos(высота) * Math.cos(азимут),
