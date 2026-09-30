@@ -270,9 +270,11 @@
     if (document.getElementById("spin").checked && !reduced) азимут += 0.003;
     var c = цельКрупно || центр;
     цель.set(c[0], c[1], c[2]);
-    camera.position.set(цель.x + дистанция * Math.cos(высота) * Math.cos(азимут),
-                        цель.y + дистанция * Math.cos(высота) * Math.sin(азимут),
-                        цель.z + дистанция * Math.sin(высота));
+    // узкий экран (телефон): длинная лодка не влезает по ширине — камера отходит дальше
+    var дист = дистанция * Math.max(1, 1.5 / camera.aspect);
+    camera.position.set(цель.x + дист * Math.cos(высота) * Math.cos(азимут),
+                        цель.y + дист * Math.cos(высота) * Math.sin(азимут),
+                        цель.z + дист * Math.sin(высота));
     camera.up.set(0, 0, 1); camera.lookAt(цель);
     renderer.render(scene, camera);
     requestAnimationFrame(tick);
