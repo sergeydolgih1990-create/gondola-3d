@@ -75,9 +75,10 @@
     <button type="button" data-view="stern">корма крупно</button>
   </div>
 
-  <div class="row" role="group" aria-label="Дерево" id="woodRow">
-    <span class="label">Дерево</span>
-    <button type="button" data-wood="light">светлое</button>
+  <div class="row" role="group" aria-label="Цвет" id="woodRow">
+    <span class="label">Цвет</span>
+    <button type="button" data-wood="gray">серый</button>
+    <button type="button" data-wood="light">светлое дерево</button>
     <button type="button" data-wood="dark">морёный дуб</button>
   </div>
 
@@ -123,14 +124,18 @@
   grid.rotation.x = Math.PI / 2; grid.material.transparent = true; grid.material.opacity = 0.28; scene.add(grid);
 
   // цвета по роли детали; дерево переключается кнопками
-  var ДЕРЕВО = { light: [0xd2ae80, 0.62], dark: [0x3e2c20, 0.55] };
+  // серый — все детали одним цветом, чтобы смотреть форму (Сергей, 01.10.2026: «сделай модель серым»); открывается им
+  var ДЕРЕВО = { gray: [0xb9bcbe, 0.7], light: [0xd2ae80, 0.62], dark: [0x3e2c20, 0.55] };
+  var СЕРЫЙ_ДЕТАЛИ = [0x8f9396, 0.6];
   var РОЛИ = { "латунь": [0xc9a24a, 0.32, 0.55], "металлостикер": [0xd9d6cf, 0.3, 0.4] };
-  var дерево = "light";
+  var дерево = "gray";
+  function цветДетали(r) {
+    if (РОЛИ[r]) return дерево === "gray" ? [СЕРЫЙ_ДЕТАЛИ[0], СЕРЫЙ_ДЕТАЛИ[1], 0] : РОЛИ[r];
+    return [ДЕРЕВО[дерево][0], ДЕРЕВО[дерево][1], 0];
+  }
   function материал(ч) {
-    var r = ч["роль"], c, rough, metal = 0;
-    if (РОЛИ[r]) { c = РОЛИ[r][0]; rough = РОЛИ[r][1]; metal = РОЛИ[r][2]; }
-    else { c = ДЕРЕВО[дерево][0]; rough = ДЕРЕВО[дерево][1]; }
-    return new THREE.MeshStandardMaterial({ color: c, roughness: rough, metalness: metal });
+    var q = цветДетали(ч["роль"]);
+    return new THREE.MeshStandardMaterial({ color: q[0], roughness: q[1], metalness: q[2] });
   }
 
   function buffer(b64) {
@@ -210,8 +215,8 @@
   function перекрасить() {
     if (!модель) return;
     модель.children.forEach(function (m) {
-      if (РОЛИ[m.userData.роль]) return;
-      m.material.color.setHex(ДЕРЕВО[дерево][0]); m.material.roughness = ДЕРЕВО[дерево][1];
+      var q = цветДетали(m.userData.роль);
+      m.material.color.setHex(q[0]); m.material.roughness = q[1]; m.material.metalness = q[2];
     });
     Array.prototype.forEach.call(document.querySelectorAll("[data-wood]"), function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-wood") === дерево ? "true" : "false"); });
   }
