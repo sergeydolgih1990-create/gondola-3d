@@ -20,6 +20,7 @@
     --cur: #3a3522; color-scheme: dark;
   }
   html { height: 100%; }
+  [hidden] { display: none !important; }
   body { margin: 0; background: var(--ground); color: var(--ink);
          font-family: "IBM Plex Sans", system-ui, "Segoe UI", sans-serif; font-size: 15px; line-height: 1.5; }
   .wrap { min-height: 100vh; display: flex; flex-direction: column; gap: 12px; padding: 18px 16px 24px;
@@ -67,8 +68,9 @@
   .facts dt { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 0 0 2px; }
   .facts dd { margin: 0; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 16px; font-variant-numeric: tabular-nums; }
   .note { color: var(--muted); font-size: 13px; margin: 0; max-width: 90ch; }
-  @media (max-width: 640px) { .stage { min-height: 320px; height: 55vh; } .gcode { font-size: 10px; max-width: 62%; }
-                              .toolinfo { font-size: 11px; } .hint { display: none; } }
+  @media (max-width: 640px) { .stage { min-height: 320px; height: 55vh; } .gcode { display: none; }
+                              .toolinfo { font-size: 11px; left: 8px; right: 8px; top: 8px; text-align: left; }
+                              .hint { display: none; } }
 </style>
 
 <div class="wrap">
@@ -507,9 +509,10 @@
   var азимут = -2.2, высота = 0.62, дистанция = 280, цель = new THREE.Vector3(LC, 0, B.T / 2), сдвиг = new THREE.Vector3();
   var РАКУРСЫ = { "34": [-2.2, 0.62, 280, null], "top": [-Math.PI / 2, 1.52, 300, null], "side": [-Math.PI / 2, 0.12, 260, null],
                  "end": [Math.PI, 0.25, 140, null], "salon": [-2.0, 0.9, 110, [-1, -1]], "tool": [-2.3, 0.55, 45, null] };
+  function узко() { var w = canvas.clientWidth || 1, h = canvas.clientHeight || 1; return Math.max(1, 1.25 * h / w); }
   Array.prototype.forEach.call(document.querySelectorAll("[data-view]"), function (b) {
     b.addEventListener("click", function () {
-      var v = b.getAttribute("data-view"), r = РАКУРСЫ[v]; азимут = r[0]; высота = r[1]; дистанция = r[2]; сдвиг.set(0, 0, 0);
+      var v = b.getAttribute("data-view"), r = РАКУРСЫ[v]; азимут = r[0]; высота = r[1]; дистанция = r[2] * узко(); сдвиг.set(0, 0, 0);
       if (v === "salon") {   // салон: в первом установе X ≈ 45–130 от кормы, во втором — зеркально
         var xs = prog()["установ"] === "Poz 1" ? 88 + 3 : B.L - 91;
         сдвиг.set(xs - LC, 0, 0);
@@ -629,6 +632,7 @@
   Promise.all(all).then(function (r) {
     TGT = [[r[0], r[1]], [r[2], r[3]]];
     buildButtons(); buildProgButtons();
+    дистанция = РАКУРСЫ["34"][2] * узко();
     selectProg(0, true);
     requestAnimationFrame(tick);
   }).catch(function (e) { $("note").textContent = "Не распаковалось: " + e; busy(false); });
