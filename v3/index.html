@@ -94,7 +94,7 @@
 </div>
 
 <script src="three.min.js"></script>
-<script src="gondola-data.js?v=813f2b07"></script>
+<script src="gondola-data.js?v=adc45c07"></script>
 <script>
 (function () {
   var ДАННЫЕ = window.ГОНДОЛА || { варианты: [] };
@@ -144,7 +144,9 @@
     return new Response(stream).arrayBuffer();
   }
   function распаковать(d) {
-    return Promise.all([распаковать1(d["позиции"]), распаковать1(d["индексы"])]).then(function (r) { d._pos = r[0]; d._idx = r[1]; });
+    var ч = [распаковать1(d["позиции"]), распаковать1(d["индексы"])];
+    if (d["нормали"]) ч.push(распаковать1(d["нормали"]));
+    return Promise.all(ч).then(function (r) { d._pos = r[0]; d._idx = r[1]; d._nrm = r[2]; });
   }
   function geometryFrom(d) {
     var q = new Int16Array(d._pos), pos = new Float32Array(q.length), шаг = d["шаг"];
@@ -153,7 +155,9 @@
     var geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
     geo.setIndex(new THREE.BufferAttribute(idx, 1));
-    geo.computeVertexNormals();
+    // готовые нормали с резкими острыми кромками (если есть), иначе — средние по вершинам
+    if (d._nrm) { geo.setAttribute("normal", new THREE.BufferAttribute(new Int8Array(d._nrm), 3, true)); }
+    else { geo.computeVertexNormals(); }
     return geo;
   }
 
