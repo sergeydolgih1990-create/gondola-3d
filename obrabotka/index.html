@@ -78,10 +78,12 @@
     <h1>Гондола — обработка бруска «в воздухе»</h1>
     <p>Как идут фрезы по траекториям и что остаётся на бруске 182 × 28,4 × 37,2 мм (корпус +3 мм с каждой стороны,
        без крепежа и поддона). Два установа: верх, потом переворот через торец и низ.
-       Цвет поверхности — сколько материала ещё осталось над моделью.</p>
+       Цвет поверхности — сколько материала ещё осталось над моделью. Два варианта траекторий: по слоям (черновая и
+       чистовая проходят слой по всей лодке) и по участкам (чистовая и доработка доделывают каждое место целиком —
+       стенки по кругу с опусканием, полы и сиденья кольцами). Черновая в обоих одинаковая.</p>
   </header>
 
-  <div class="row" id="sets" role="group" aria-label="Комплект" hidden><span class="label">Комплект</span></div>
+  <div class="row" id="sets" role="group" aria-label="Вариант"><span class="label">Вариант</span></div>
   <div class="row" id="progs" role="group" aria-label="Программа"><span class="label">Программа</span></div>
 
   <div class="stage">
@@ -150,7 +152,7 @@
 </div>
 
 <script src="three.min.js"></script>
-<script src="obrabotka-data.js?v=392ae424"></script>
+<script src="obrabotka-data.js?v=e59c20d2"></script>
 <script>
 (function () {
   "use strict";
@@ -252,7 +254,7 @@
   function runProgram(H, p, s1) { for (var s = 0; s < s1; s++) stampSeg(H, p, s, 0, 1); }
 
   // ---------------- состояние ----------------
-  var sets = DATA["комплекты"], setIdx = 0, progIdx = 0;
+  var sets = DATA["комплекты"], setIdx = sets.length - 1, progIdx = 0;
   var H = null;
   var snaps = sets.map(function () { return []; });
   var playT = 0, doneSeg = 0, playing = false;
@@ -466,7 +468,7 @@
     updatePath(q.s);
     $("slider").value = p.total > 0 ? Math.round(playT / p.total * 10000) : 0;
     $("ttext").textContent = fmt(playT) + " / " + fmt(p.total);
-    var f = p["фреза"];
+    var f = p["фреза"], set = sets[setIdx];
     $("toolinfo").innerHTML = "<b>" + f["вид"] + " Ø" + fd(2 * f.r) + "</b><br>" + p["установ"] + " · " + p["файл"] +
       (p["заметка"] ? "<br>" + p["заметка"] : "") +
       "<br>X " + q.x.toFixed(2) + "  Y " + q.y.toFixed(2) + "  Z " + q.z.toFixed(2) +
@@ -477,8 +479,8 @@
       out.push(s === q.s ? '<span class="cur">' + t + "</span>" : t);
     }
     $("gcode").innerHTML = out.join("\n");
-    var set = sets[setIdx];
-    var facts = [["установ", p["установ"] === "Poz 1" ? "1 — верх" : "2 — низ, перевёрнут"],
+    var facts = [["вариант", set["имя"].replace("Вариант ", "")],
+                 ["установ", p["установ"] === "Poz 1" ? "1 — верх" : "2 — низ, перевёрнут"],
                  ["программа", (progIdx + 1) + " из " + set["программы"].length],
                  ["фреза", f["вид"] + " Ø" + fd(2 * f.r)], ["подача", p.K[q.s] === 1 ? Math.round(p.F[q.s]) + " мм/мин" : "—"],
                  ["время программы", fmt(p.total) + " на лодку"], ["ход", (q.s + 1) + " из " + p.D.length]];
