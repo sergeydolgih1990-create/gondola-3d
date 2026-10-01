@@ -94,7 +94,7 @@
 </div>
 
 <script src="three.min.js"></script>
-<script src="gondola-data.js?v=03e6f5e0"></script>
+<script src="gondola-data.js?v=1dc90cd4"></script>
 <script>
 (function () {
   var ДАННЫЕ = window.ГОНДОЛА || { варианты: [] };
@@ -126,11 +126,14 @@
   // цвета по роли детали; дерево переключается кнопками
   var ДЕРЕВО = { light: [0xd2ae80, 0.62], dark: [0x3e2c20, 0.55], gray: [0xa3a7aa, 0.7] };   // серый — оценить форму без цвета
   var РОЛИ = { "латунь": [0xc9a24a, 0.32, 0.55], "металлостикер": [0xd9d6cf, 0.3, 0.4] };
+  // подставка — своим тоном, контрастно к лодке (Сергей, 02.10: «подставка того же цвета, что и лодка»)
+  var ПОДСТАВКА = { light: [0x5c4130, 0.6], dark: [0xcdb08a, 0.62], gray: [0x6d5848, 0.65] };
   var дерево = "light";
+  function тон(r) { return r === "подставка" ? ПОДСТАВКА[дерево] : ДЕРЕВО[дерево]; }
   function материал(ч) {
     var r = ч["роль"], c, rough, metal = 0;
     if (РОЛИ[r]) { c = РОЛИ[r][0]; rough = РОЛИ[r][1]; metal = РОЛИ[r][2]; }
-    else { c = ДЕРЕВО[дерево][0]; rough = ДЕРЕВО[дерево][1]; }
+    else { c = тон(r)[0]; rough = тон(r)[1]; }
     return new THREE.MeshStandardMaterial({ color: c, roughness: rough, metalness: metal });
   }
 
@@ -216,7 +219,7 @@
     if (!модель) return;
     модель.children.forEach(function (m) {
       if (РОЛИ[m.userData.роль]) return;
-      m.material.color.setHex(ДЕРЕВО[дерево][0]); m.material.roughness = ДЕРЕВО[дерево][1];
+      var t = тон(m.userData.роль); m.material.color.setHex(t[0]); m.material.roughness = t[1];
     });
     Array.prototype.forEach.call(document.querySelectorAll("[data-wood]"), function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-wood") === дерево ? "true" : "false"); });
   }
