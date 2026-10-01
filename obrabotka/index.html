@@ -146,11 +146,11 @@
   <p class="note" id="note">Сетка смотрелки 0,1 мм — для глаза, точная проверка — в модели съёма с шагом 0,05 мм; цвет
     считается с допуском 0,1 мм по горизонтали (иначе вертикальные стенки красятся ложно). Строки показаны как G00/G01 по
     точкам пути — это ещё не программа для станка. Время — по подаче (Ø6 и Ø3,175 — 2000, Ø1 — 1500, Ø3 — 800 мм/мин),
-    холостые — 5 м/мин (оценка). Z 0 — низ бруска в первом установе; во втором брусок перевёрнут через торец.</p>
+    холостые — 5 м/мин (оценка). Ø1 — DJTOL A2QX3.106 (рабочая часть 6 мм, хвостовик 3,175): она не заходит туда, где хвостовик задел бы деталь или оставшийся материал. Z 0 — низ бруска в первом установе; во втором брусок перевёрнут через торец.</p>
 </div>
 
 <script src="three.min.js"></script>
-<script src="obrabotka-data.js?v=2c8badfe"></script>
+<script src="obrabotka-data.js?v=392ae424"></script>
 <script>
 (function () {
   "use strict";
@@ -373,9 +373,9 @@
       cyl(r, Lc - r, r, flute);
     } else cyl(r, Lc, 0, flute);
     if (rs > r + 1e-6) {               // переход от шейки к хвостовику — конусом
-      var cone = new THREE.Mesh(new THREE.CylinderGeometry(rs, r, 1.5, 32), metal);
-      cone.rotation.x = Math.PI / 2; cone.position.z = Lc + 0.75; tool.add(cone);
-      cyl(rs, 30, Lc + 1.5, metal);
+      var cone = new THREE.Mesh(new THREE.CylinderGeometry(rs, r, 0.4, 32), metal);
+      cone.rotation.x = Math.PI / 2; cone.position.z = Lc + 0.2; tool.add(cone);
+      cyl(rs, 30, Lc + 0.4, metal);
     } else cyl(rs, 30, Lc, metal);
     setGhost();
   }
