@@ -94,7 +94,7 @@
 </div>
 
 <script src="three.min.js"></script>
-<script src="gondola-data.js?v=1dc90cd4"></script>
+<script src="gondola-data.js?v=098b78d5"></script>
 <script>
 (function () {
   var ДАННЫЕ = window.ГОНДОЛА || { варианты: [] };
@@ -331,8 +331,14 @@
 
   if (ВАРИАНТЫ.length) {
     var все = [];
-    ВАРИАНТЫ.forEach(function (d) { d["части"].forEach(function (ч) { все.push(распаковать(ч)); }); });
+    // часть может ссылаться на такую же у другого варианта ("как": [вариант, часть]) — один корпус на все кнопки
+    ВАРИАНТЫ.forEach(function (d) { d["части"].forEach(function (ч) { if (!ч["как"]) все.push(распаковать(ч)); }); });
     Promise.all(все).then(function () {
+      ВАРИАНТЫ.forEach(function (d) { d["части"].forEach(function (ч) {
+        if (!ч["как"]) return;
+        var s = ВАРИАНТЫ[ч["как"][0]]["части"][ч["как"][1]];
+        ч._pos = s._pos; ч._idx = s._idx; ч._nrm = s._nrm; ч["шаг"] = s["шаг"]; ч["биты_индексов"] = s["биты_индексов"];
+      }); });
       показать(ДАННЫЕ["начать_с"] != null ? ДАННЫЕ["начать_с"] : ВАРИАНТЫ.length - 1);
       перекрасить(); tick();
     }).catch(function (e) { document.getElementById("desc").textContent = "Модель не распаковалась: " + e; });
