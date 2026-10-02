@@ -1,0 +1,638 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Гондола — лодка 1, новые траектории</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --ground: #e9edee; --panel: #f7f9f9; --ink: #13191c; --muted: #5d6a6f; --line: #c6d0d2; --accent: #1f6f8b;
+    --cur: #fff1c7;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #101618; --panel: #182023; --ink: #e8eded; --muted: #94a3a8; --line: #2b383c; --accent: #5bb2cf;
+      --cur: #3a3522; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #101618; --panel: #182023; --ink: #e8eded; --muted: #94a3a8; --line: #2b383c; --accent: #5bb2cf;
+    --cur: #3a3522; color-scheme: dark;
+  }
+  html { height: 100%; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--ground); color: var(--ink);
+         font-family: "IBM Plex Sans", system-ui, "Segoe UI", sans-serif; font-size: 15px; line-height: 1.5; }
+  .wrap { min-height: 100vh; display: flex; flex-direction: column; gap: 12px; padding: 18px 16px 24px;
+          max-width: 1280px; margin: 0 auto; box-sizing: border-box; }
+  header h1 { font-size: 21px; font-weight: 600; margin: 0 0 4px; text-wrap: balance; }
+  header p { margin: 0; color: var(--muted); font-size: 14px; max-width: 80ch; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .row .label { font-size: 13px; color: var(--muted); margin-right: 2px; min-width: 88px; }
+  button, select {
+    font: inherit; font-size: 14px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 3px;
+    background: var(--panel); color: var(--ink); cursor: pointer;
+  }
+  button[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); font-weight: 500; }
+  button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button.big { font-size: 16px; min-width: 44px; }
+  .stage { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 3px;
+           min-height: 380px; height: 62vh; overflow: hidden; }
+  .stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+  .gcode { position: absolute; left: 10px; top: 10px; margin: 0; padding: 6px 8px; max-width: min(56ch, 60%);
+           font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12px; line-height: 1.45;
+           background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid var(--line);
+           border-radius: 3px; white-space: pre; overflow: hidden; }
+  .gcode .cur { background: var(--cur); display: inline-block; min-width: 100%; }
+  .toolinfo { position: absolute; right: 10px; top: 10px; padding: 6px 10px; font-size: 13px;
+              background: color-mix(in srgb, var(--panel) 88%, transparent); border: 1px solid var(--line);
+              border-radius: 3px; text-align: right; }
+  .toolinfo b { font-weight: 600; }
+  .busy { position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+          background: color-mix(in srgb, var(--panel) 70%, transparent); font-size: 16px; }
+  .hint { position: absolute; left: 12px; bottom: 10px; font-family: "IBM Plex Mono", ui-monospace, monospace;
+          font-size: 11px; letter-spacing: 0.04em; color: var(--muted);
+          background: color-mix(in srgb, var(--panel) 82%, transparent); padding: 3px 7px; border-radius: 2px; }
+  .timeline { display: flex; gap: 10px; align-items: center; }
+  .timeline input[type=range] { flex: 1; min-width: 160px; }
+  .timeline .t { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 13px; font-variant-numeric: tabular-nums;
+                 color: var(--muted); white-space: nowrap; }
+  .toggles { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; color: var(--muted); }
+  .toggles label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+  .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; color: var(--muted); }
+  .legend span { display: inline-flex; gap: 6px; align-items: center; }
+  .legend i { width: 18px; height: 10px; border-radius: 1px; display: inline-block; }
+  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); background: var(--panel);
+           border: 1px solid var(--line); border-radius: 3px; overflow: hidden; margin: 0; }
+  .facts div { padding: 9px 14px; box-shadow: 1px 0 0 var(--line), 0 1px 0 var(--line); }
+  .facts dt { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 0 0 2px; }
+  .facts dd { margin: 0; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 16px; font-variant-numeric: tabular-nums; }
+  .note { color: var(--muted); font-size: 13px; margin: 0; max-width: 90ch; }
+  @media (max-width: 640px) { .stage { min-height: 320px; height: 55vh; } .gcode { display: none; }
+                              .toolinfo { font-size: 11px; left: 8px; right: 8px; top: 8px; text-align: left; }
+                              .hint { display: none; } }
+</style>
+
+<div class="wrap">
+  <p>Первый установ, лодка 1 у бортика Y, заготовка 266 × 136 × 40 на первом месте поддона. Ходы — из программ так, как их прочтёт станок. Черновая Ø12,7 кольцами от середины участка наружу со входом пологой спиралью; Ø6 — плоскость Z 35 по остальной заготовке и доработка лодки; палочки носа и кормы — стаканом Ø3,175; чистовая Ø3,175 и доработка Ø1 — без зоны палочек. Цвет — сколько осталось до детали.</p>
+  </header>
+
+  <div class="row" id="sets" role="group" aria-label="Вариант"><span class="label">Вариант</span></div>
+  <div class="row" id="progs" role="group" aria-label="Программа"><span class="label">Программа</span></div>
+
+  <div class="stage">
+    <canvas id="c"></canvas>
+    <pre class="gcode" id="gcode" aria-label="Текущая строка программы"></pre>
+    <div class="toolinfo" id="toolinfo"></div>
+    <div class="busy" id="busy">считаю предыдущие программы…</div>
+    <div class="hint">тяните — поворот · колесо или два пальца — масштаб · правой кнопкой или двумя пальцами — сдвиг</div>
+  </div>
+
+  <div class="row" role="group" aria-label="Проигрывание">
+    <button type="button" class="big" id="b_start" title="к началу программы">⏮</button>
+    <button type="button" class="big" id="b_prev" title="предыдущая программа (фреза)">◀◀</button>
+    <button type="button" class="big" id="b_play" title="пуск / пауза">▶</button>
+    <button type="button" class="big" id="b_step" title="один ход вперёд">▶|</button>
+    <button type="button" class="big" id="b_next" title="следующая программа (фреза)">▶▶</button>
+    <button type="button" id="b_end" title="конец программы">в конец</button>
+    <span class="label" style="min-width:auto;margin-left:8px">Скорость</span>
+    <select id="speed" aria-label="Скорость">
+      <option value="0.25">×¼ медленнее станка</option>
+      <option value="1">×1 как на станке</option>
+      <option value="5">×5</option>
+      <option value="20" selected>×20</option>
+      <option value="100">×100</option>
+      <option value="500">×500</option>
+    </select>
+  </div>
+  <div class="timeline">
+    <input type="range" id="slider" min="0" max="10000" value="0" aria-label="Положение в программе">
+    <span class="t" id="ttext">0:00 / 0:00</span>
+  </div>
+
+  <div class="row" role="group" aria-label="Ракурс">
+    <span class="label">Ракурс</span>
+    <button type="button" data-view="34">3/4</button>
+    <button type="button" data-view="top">сверху</button>
+    <button type="button" data-view="side">сбоку</button>
+    <button type="button" data-view="end">с торца</button>
+    <button type="button" data-view="salon">салон крупно</button>
+    <button type="button" data-view="tool">крупно у фрезы</button>
+  </div>
+
+  <div class="toggles">
+    <label><input type="checkbox" id="t_path" checked> траектория впереди фрезы</label>
+    <label><input type="checkbox" id="t_pathall" autocomplete="off"> вся траектория</label>
+    <label><input type="checkbox" id="t_colors" checked> цвет — сколько осталось до модели</label>
+    <label><input type="checkbox" id="t_follow"> камера за фрезой</label>
+    <label><input type="checkbox" id="t_auto" checked> дальше — следующая программа</label>
+    <label><input type="checkbox" id="t_ghost"> фреза полупрозрачная</label>
+  </div>
+
+  <div class="legend" id="legend">
+    <span><i style="background:#c8463a"></i>осталось больше 1 мм</span>
+    <span><i style="background:#ef9a3a"></i>0,3–1 мм</span>
+    <span><i style="background:#ecd24c"></i>0,05–0,3 мм</span>
+    <span><i style="background:#8fc27d"></i>по модели (±0,05)</span>
+    <span><i style="background:#3f6fd6"></i>снято глубже модели</span>
+    <span><i style="background:#d9c3a0"></i>отход (не деталь)</span>
+  </div>
+
+  <dl class="facts" id="facts"></dl>
+  <p class="note" id="note">Сетка смотрелки 0,2 мм — для общего вида; точная проверка — модель съёма ячейки 0,05 мм и проверка программ 0,1 мм. Сетка смотрелки 0,1 мм — для глаза, точная проверка — в модели съёма с шагом 0,05 мм; цвет
+    считается с допуском 0,1 мм по горизонтали (иначе вертикальные стенки красятся ложно). Строки показаны как G00/G01 по
+    точкам пути — это ещё не программа для станка. Время — по подаче (Ø6 и Ø3,175 — 2000, Ø1 — 1500, Ø3 — 800 мм/мин),
+    холостые — 5 м/мин (оценка). Ø1 — DJTOL A2QX3.106 (рабочая часть 6 мм, хвостовик 3,175): она не заходит туда, где хвостовик задел бы деталь или оставшийся материал. Z 0 — низ бруска в первом установе; во втором брусок перевёрнут через торец.</p>
+</div>
+
+<script src="three.min.js"></script>
+<script src="shchit-data.js?v=e28d79ce"></script>
+<script>
+(function () {
+  "use strict";
+  var DATA = window.ОБРАБОТКА;
+  var $ = function (id) { return document.getElementById(id); };
+  if (!DATA || !window.THREE) { $("note").textContent = "Данные или three.js не загрузились."; return; }
+
+  // ---------------- распаковка ----------------
+  function b64(s) { var bin = atob(s), u = new Uint8Array(bin.length); for (var i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i); return u; }
+  function inflate(s) {
+    var st = new Blob([b64(s)]).stream().pipeThrough(new DecompressionStream("deflate"));
+    return new Response(st).arrayBuffer();
+  }
+  function unpackProgram(p) {
+    return Promise.all([inflate(p["точки"]), inflate(p["род"]), inflate(p["подача"]), inflate(p["время"])]).then(function (r) {
+      var pi = new Int32Array(r[0]); var P = new Float32Array(pi.length);
+      for (var i = 0; i < pi.length; i++) P[i] = pi[i] / 1000;
+      p.P = P; p.K = new Uint8Array(r[1]); p.F = new Float32Array(r[2]); p.D = new Float32Array(r[3]);
+      var T = new Float64Array(p.D.length + 1);
+      for (var k = 0; k < p.D.length; k++) T[k + 1] = T[k] + p.D[k];
+      p.T = T; p.total = T[p.D.length];
+    });
+  }
+  // цель: сантимиллиметры int16; −32768 — нет детали (у «верхней» карты) или край детали рядом (у «нижней»)
+  function unpackTarget(s, sentinel) {
+    return inflate(s).then(function (buf) {
+      var a = new Int16Array(buf), out = new Float32Array(a.length);
+      for (var i = 0; i < a.length; i++) out[i] = a[i] === -32768 ? sentinel : a[i] / 100;
+      return out;
+    });
+  }
+
+  // ---------------- сетка высот ----------------
+  var G = DATA["сетка"];
+  var RES = G.RES, GX0 = G.GX0, GX1 = G.GX1, GY0 = G.GY0, GY1 = G.GY1;
+  var NX = Math.round((GX1 - GX0) / RES), NY = Math.round((GY1 - GY0) / RES), N = NX * NY;
+  var AIR = -1e9;
+  var B = DATA["заготовка"];
+  function cx(i) { return GX0 + (i + 0.5) * RES; }
+  function cy(j) { return GY0 + (j + 0.5) * RES; }
+
+  function blankPoz1() {
+    var H = new Float32Array(N);
+    for (var j = 0; j < NY; j++) {
+      var y = cy(j);
+      for (var i = 0; i < NX; i++) {
+        var x = cx(i);
+        H[j * NX + i] = (x >= 0 && x <= B.L && Math.abs(y) <= B.W / 2) ? B.T : AIR;
+      }
+    }
+    return H;
+  }
+  // переворот через торец: X' = L − X (сетка симметрична относительно середины бруска), материал — до высоты бруска
+  function flipToPoz2(H1, zref) {
+    var H2 = new Float32Array(N);
+    for (var j = 0; j < NY; j++) for (var i = 0; i < NX; i++) {
+      var v = H1[j * NX + (NX - 1 - i)];
+      H2[j * NX + i] = v > 1e-6 ? zref : AIR;
+    }
+    return H2;
+  }
+  var TGT = null;   // [[hi, lo] Poz 1, [hi, lo] Poz 2]
+
+  // ---------------- съём ----------------
+  var dirty = { i0: NX, i1: -1, j0: NY, j1: -1 };
+  function markAll() { dirty.i0 = 0; dirty.i1 = NX - 1; dirty.j0 = 0; dirty.j1 = NY - 1; }
+  function stampPoint(H, px, py, pz, r, ball) {
+    var i0 = Math.max(0, Math.floor((px - r - GX0) / RES)), i1 = Math.min(NX - 1, Math.ceil((px + r - GX0) / RES));
+    var j0 = Math.max(0, Math.floor((py - r - GY0) / RES)), j1 = Math.min(NY - 1, Math.ceil((py + r - GY0) / RES));
+    if (i0 > i1 || j0 > j1) return;
+    var rr = r * r, any = false;
+    for (var j = j0; j <= j1; j++) {
+      var dy = GY0 + (j + 0.5) * RES - py, row = j * NX;
+      for (var i = i0; i <= i1; i++) {
+        var dx = GX0 + (i + 0.5) * RES - px, d2 = dx * dx + dy * dy;
+        if (d2 > rr) continue;
+        var z = ball ? pz + r - Math.sqrt(rr - d2) : pz;
+        if (z < H[row + i]) { H[row + i] = z; any = true; }
+      }
+    }
+    if (any) {
+      if (i0 < dirty.i0) dirty.i0 = i0; if (i1 > dirty.i1) dirty.i1 = i1;
+      if (j0 < dirty.j0) dirty.j0 = j0; if (j1 > dirty.j1) dirty.j1 = j1;
+    }
+  }
+  function isBall(p) { return p["фреза"]["вид"] === "радиусная"; }
+  function stampSeg(H, p, s, f0, f1) {
+    if (p.K[s] === 2) return;
+    var r = p["фреза"].r, ball = isBall(p), step = p["фреза"]["шаг"] || RES / 2;
+    var P = p.P, a = s * 3, b = a + 3;
+    var x0 = P[a], y0 = P[a + 1], z0 = P[a + 2], x1 = P[b], y1 = P[b + 1], z1 = P[b + 2];
+    var L = Math.max(Math.hypot(x1 - x0, y1 - y0), Math.abs(z1 - z0)) * (f1 - f0);
+    var n = Math.max(1, Math.ceil(L / step));
+    for (var k = 0; k <= n; k++) {
+      var t = f0 + (f1 - f0) * k / n;
+      stampPoint(H, x0 + (x1 - x0) * t, y0 + (y1 - y0) * t, z0 + (z1 - z0) * t, r, ball);
+    }
+  }
+  function runProgram(H, p, s1) { for (var s = 0; s < s1; s++) stampSeg(H, p, s, 0, 1); }
+
+  // ---------------- состояние ----------------
+  var sets = DATA["комплекты"], setIdx = sets.length - 1, progIdx = 0;
+  var H = null;
+  var snaps = sets.map(function () { return []; });
+  var playT = 0, doneSeg = 0, playing = false;
+
+  function startState(si, pi) {
+    var set = sets[si], progs = set["программы"];
+    if (snaps[si][pi]) return snaps[si][pi];
+    var S;
+    if (pi === 0) S = blankPoz1();
+    else {
+      S = new Float32Array(startState(si, pi - 1));
+      runProgram(S, progs[pi - 1], progs[pi - 1].D.length);
+      if (progs[pi]["установ"] === "Poz 2" && progs[pi - 1]["установ"] === "Poz 1") S = flipToPoz2(S, set.z_ref);
+    }
+    snaps[si][pi] = S;
+    return S;
+  }
+  function prog() { return sets[setIdx]["программы"][progIdx]; }
+  function segAt(p, t) {
+    var lo = 0, hi = p.D.length;
+    while (lo < hi) { var mid = (lo + hi) >> 1; if (p.T[mid + 1] <= t) lo = mid + 1; else hi = mid; }
+    return Math.min(lo, Math.max(0, p.D.length - 1));
+  }
+  function toolPos(p, t) {
+    var s = segAt(p, t), a = s * 3, b = a + 3, P = p.P;
+    var d = p.D[s], f = d > 0 ? Math.min(1, Math.max(0, (t - p.T[s]) / d)) : 1;
+    return { s: s, f: f, x: P[a] + (P[b] - P[a]) * f, y: P[a + 1] + (P[b + 1] - P[a + 1]) * f, z: P[a + 2] + (P[b + 2] - P[a + 2]) * f };
+  }
+  function seek(t) {
+    var p = prog();
+    t = Math.max(0, Math.min(p.total, t));
+    var q = toolPos(p, t);
+    if (q.s < doneSeg || H === null) { H = new Float32Array(startState(setIdx, progIdx)); doneSeg = 0; markAll(); }
+    for (var s = doneSeg; s < q.s; s++) stampSeg(H, p, s, 0, 1);
+    doneSeg = q.s;
+    stampSeg(H, p, q.s, 0, q.f);
+    playT = t;
+    return q;
+  }
+
+  // ---------------- сцена ----------------
+  var canvas = $("c");
+  var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  var scene = new THREE.Scene();
+  var camera = new THREE.PerspectiveCamera(34, 1, 0.5, 3000);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x9aa7ab, 0.65));
+  var key = new THREE.DirectionalLight(0xffffff, 0.85); key.position.set(-120, -200, 260); scene.add(key);
+  var fill = new THREE.DirectionalLight(0xffffff, 0.4); fill.position.set(200, -60, 120); scene.add(fill);
+  var rim = new THREE.DirectionalLight(0xffffff, 0.3); rim.position.set(0, 200, 150); scene.add(rim);
+
+  // условная плоскость под бруском (поддона нет — обработка «в воздухе»)
+  var ground = new THREE.Mesh(new THREE.PlaneGeometry(B.L + 70, B.W + 60),
+    new THREE.MeshStandardMaterial({ color: 0xc9c3b6, roughness: 0.95, transparent: true, opacity: 0.55 }));
+  ground.position.set(B.L / 2, 0, -1.3); scene.add(ground);
+
+  // заготовка — сетка высот
+  var geo = new THREE.BufferGeometry();
+  var pos = new Float32Array(N * 3), col = new Float32Array(N * 3);
+  for (var j = 0; j < NY; j++) for (var i = 0; i < NX; i++) { var k = j * NX + i; pos[3 * k] = cx(i); pos[3 * k + 1] = cy(j); }
+  var idx = new Uint32Array((NX - 1) * (NY - 1) * 6), q = 0;
+  for (var jj = 0; jj < NY - 1; jj++) for (var ii = 0; ii < NX - 1; ii++) {
+    var a0 = jj * NX + ii, a1 = a0 + 1, a2 = a0 + NX, a3 = a2 + 1;
+    idx[q++] = a0; idx[q++] = a1; idx[q++] = a3; idx[q++] = a0; idx[q++] = a3; idx[q++] = a2;
+  }
+  geo.setIndex(new THREE.BufferAttribute(idx, 1));
+  var posAttr = new THREE.BufferAttribute(pos, 3), colAttr = new THREE.BufferAttribute(col, 3);
+  posAttr.setUsage(THREE.DynamicDrawUsage); colAttr.setUsage(THREE.DynamicDrawUsage);
+  geo.setAttribute("position", posAttr); geo.setAttribute("color", colAttr);
+  var blankMesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85 }));
+  blankMesh.frustumCulled = false;
+  scene.add(blankMesh);
+
+  var C = {
+    wood: [0.851, 0.765, 0.627],
+    ok: [0.561, 0.761, 0.490], gouge: [0.247, 0.435, 0.839],
+    y: [0.925, 0.824, 0.298], o: [0.937, 0.604, 0.227], r: [0.784, 0.275, 0.227]
+  };
+  function mix(a, b, t) { return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t]; }
+  function colorFor(h, thi, tlo, colors) {
+    if (!colors || isNaN(thi)) return C.wood;
+    if (h < tlo - 0.05) return C.gouge;
+    var d = h - thi;
+    if (d <= 0.05) return C.ok;
+    if (d <= 0.3) return C.y;
+    if (d <= 1.0) return mix(C.y, C.o, (d - 0.3) / 0.7);
+    return mix(C.o, C.r, Math.min(1, (d - 1.0) / 2.0));
+  }
+  function refreshMesh() {
+    if (dirty.i1 < 0) return;
+    var colors = $("t_colors").checked;
+    var tg = TGT[prog()["установ"] === "Poz 1" ? 0 : 1], thi = tg[0], tlo = tg[1];
+    var j0 = Math.max(0, dirty.j0 - 1), j1 = Math.min(NY - 1, dirty.j1 + 1);
+    var i0 = Math.max(0, dirty.i0 - 1), i1 = Math.min(NX - 1, dirty.i1 + 1);
+    for (var j = j0; j <= j1; j++) for (var i = i0; i <= i1; i++) {
+      var k = j * NX + i, h = H[k];
+      pos[3 * k + 2] = h < -1e8 ? -1.2 : h;
+      var c = h < -1e8 ? C.wood : colorFor(h, thi[k], tlo[k], colors);
+      col[3 * k] = c[0]; col[3 * k + 1] = c[1]; col[3 * k + 2] = c[2];
+    }
+    posAttr.needsUpdate = true; colAttr.needsUpdate = true;
+    dirty.i0 = NX; dirty.i1 = -1; dirty.j0 = NY; dirty.j1 = -1;
+  }
+
+  // фреза: режущая часть (у Ø1 — шейка) и хвостовик
+  var tool = new THREE.Group(); scene.add(tool);
+  var metal = new THREE.MeshStandardMaterial({ color: 0x9aa4ab, metalness: 0.55, roughness: 0.35, transparent: true, opacity: 1 });
+  var flute = new THREE.MeshStandardMaterial({ color: 0x6f7b82, metalness: 0.6, roughness: 0.3, transparent: true, opacity: 1 });
+  function cyl(r, h, z, mat) {
+    var m = new THREE.Mesh(new THREE.CylinderGeometry(r, r, h, 32), mat);
+    m.rotation.x = Math.PI / 2; m.position.z = z + h / 2; tool.add(m);
+  }
+  function buildTool(p) {
+    while (tool.children.length) { var c = tool.children.pop(); c.geometry.dispose(); }
+    var f = p["фреза"], r = f.r, Lc = f.Lc, rs = f.rs;
+    if (isBall(p)) {
+      var sph = new THREE.Mesh(new THREE.SphereGeometry(r, 32, 16), flute); sph.position.z = r; tool.add(sph);
+      cyl(r, Lc - r, r, flute);
+    } else cyl(r, Lc, 0, flute);
+    if (rs > r + 1e-6) {               // переход от шейки к хвостовику — конусом
+      var cone = new THREE.Mesh(new THREE.CylinderGeometry(rs, r, 0.4, 32), metal);
+      cone.rotation.x = Math.PI / 2; cone.position.z = Lc + 0.2; tool.add(cone);
+      cyl(rs, 30, Lc + 0.4, metal);
+    } else cyl(rs, 30, Lc, metal);
+    setGhost();
+  }
+  function setGhost() {
+    var op = $("t_ghost").checked ? 0.35 : 1;
+    metal.opacity = op; flute.opacity = op; metal.depthWrite = op === 1; flute.depthWrite = op === 1;
+  }
+
+  // траектория: рабочие — оранжевые, холостые — синие; по умолчанию видны ближайшие ходы впереди фрезы
+  var pathGroup = new THREE.Group(); scene.add(pathGroup);
+  var pathLine = null, AHEAD = 1500;
+  function buildPath(p) {
+    while (pathGroup.children.length) { var c = pathGroup.children.pop(); c.geometry.dispose(); c.material.dispose(); }
+    var n = p.D.length, v = new Float32Array(n * 6), cc = new Float32Array(n * 6);
+    for (var s = 0; s < n; s++) {
+      var a = s * 3;
+      v.set([p.P[a], p.P[a + 1], p.P[a + 2], p.P[a + 3], p.P[a + 4], p.P[a + 5]], s * 6);
+      var c3 = p.K[s] === 1 ? [0.85, 0.45, 0.12] : [0.18, 0.5, 0.82];
+      cc.set(c3.concat(c3), s * 6);
+    }
+    var g = new THREE.BufferGeometry();
+    g.setAttribute("position", new THREE.BufferAttribute(v, 3));
+    g.setAttribute("color", new THREE.BufferAttribute(cc, 3));
+    pathLine = new THREE.LineSegments(g, new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.7 }));
+    pathLine.frustumCulled = false; pathGroup.add(pathLine);
+    pathGroup.visible = $("t_path").checked;
+  }
+  function updatePath(s) {
+    if (!pathLine) return;
+    var n = pathLine.geometry.attributes.position.count / 2;
+    if ($("t_pathall").checked) pathLine.geometry.setDrawRange(0, n * 2);
+    else pathLine.geometry.setDrawRange(s * 2, Math.min(AHEAD, n - s) * 2);
+  }
+
+  // ---------------- интерфейс ----------------
+  function fmt(t) { t = Math.max(0, Math.round(t)); var m = Math.floor(t / 60), s = t % 60; return m + ":" + (s < 10 ? "0" : "") + s; }
+  function num(v) { return (Math.round(v * 1000) / 1000).toFixed(3).replace(/0+$/, "").replace(/\.$/, ".0"); }
+  function gline(p, s) {           // строка «как в программе» для хода s (точка s → s+1)
+    var b = (s + 1) * 3, k = p.K[s];
+    var t = "N" + String((s + 2) * 10).padStart(5, "0") + " " + (k === 1 ? "G01" : "G00") +
+            " X" + num(p.P[b]) + " Y" + num(p.P[b + 1]) + " Z" + num(p.P[b + 2]);
+    if (k === 1 && (s === 0 || p.K[s - 1] !== 1 || p.F[s - 1] !== p.F[s])) t += " F" + Math.round(p.F[s]);
+    return t;
+  }
+  function buildButtons() {
+    var srow = $("sets");
+    sets.forEach(function (s, i) {
+      var b = document.createElement("button"); b.type = "button"; b.textContent = s["имя"];
+      b.addEventListener("click", function () { selectSet(i); }); srow.appendChild(b);
+    });
+  }
+  function buildProgButtons() {
+    var row = $("progs");
+    Array.prototype.slice.call(row.querySelectorAll("button")).forEach(function (b) { row.removeChild(b); });
+    sets[setIdx]["программы"].forEach(function (p, i) {
+      var b = document.createElement("button"); b.type = "button";
+      var f = p["фреза"];
+      b.textContent = p["подпись"].replace("post", "post ");
+      b.title = f["вид"] + " Ø" + (2 * f.r) + (p["заметка"] ? " — " + p["заметка"] : "");
+      b.addEventListener("click", function () { selectProg(i, true); }); row.appendChild(b);
+    });
+  }
+  function pressButtons() {
+    Array.prototype.forEach.call($("sets").querySelectorAll("button"), function (b, i) { b.setAttribute("aria-pressed", i === setIdx); });
+    Array.prototype.forEach.call($("progs").querySelectorAll("button"), function (b, i) { b.setAttribute("aria-pressed", i === progIdx); });
+  }
+  function busy(on) { $("busy").style.display = on ? "flex" : "none"; }
+  function selectSet(i) {
+    setIdx = i; buildProgButtons();
+    selectProg(Math.min(progIdx, sets[i]["программы"].length - 1), true);
+  }
+  function selectProg(i, resetTime, toEnd) {
+    busy(true);
+    setTimeout(function () {
+      progIdx = i;
+      H = null; doneSeg = 0;
+      var p = prog();
+      buildTool(p); buildPath(p);
+      seek(toEnd ? p.total : (resetTime ? 0 : playT));
+      markAll(); refreshMesh(); pressButtons(); updateInfo(true);
+      busy(false);
+    }, 20);
+  }
+  function fd(d) { return (Math.round(d * 1000) / 1000).toString().replace(".", ","); }
+  function updateInfo(force) {
+    var p = prog(), q = toolPos(p, playT);
+    tool.position.set(q.x, q.y, q.z);
+    updatePath(q.s);
+    $("slider").value = p.total > 0 ? Math.round(playT / p.total * 10000) : 0;
+    $("ttext").textContent = fmt(playT) + " / " + fmt(p.total);
+    var f = p["фреза"], set = sets[setIdx];
+    $("toolinfo").innerHTML = "<b>" + f["вид"] + " Ø" + fd(2 * f.r) + "</b><br>" + p["установ"] + " · " + p["файл"] +
+      (p["заметка"] ? "<br>" + p["заметка"] : "") +
+      "<br>X " + q.x.toFixed(2) + "  Y " + q.y.toFixed(2) + "  Z " + q.z.toFixed(2) +
+      "<br>" + (p.K[q.s] === 1 ? "рабочий ход, F" + Math.round(p.F[q.s]) : "холостой ход");
+    var out = [];
+    for (var s = Math.max(0, q.s - 4); s <= Math.min(p.D.length - 1, q.s + 4); s++) {
+      var t = gline(p, s);
+      out.push(s === q.s ? '<span class="cur">' + t + "</span>" : t);
+    }
+    $("gcode").innerHTML = out.join("\n");
+    var facts = [["вариант", set["имя"].replace("Вариант ", "")],
+                 ["установ", p["установ"] === "Poz 1" ? "1 — верх" : "2 — низ, перевёрнут"],
+                 ["программа", (progIdx + 1) + " из " + set["программы"].length],
+                 ["фреза", f["вид"] + " Ø" + fd(2 * f.r)], ["подача", p.K[q.s] === 1 ? Math.round(p.F[q.s]) + " мм/мин" : "—"],
+                 ["время программы", fmt(p.total) + " на лодку"], ["ход", (q.s + 1) + " из " + p.D.length]];
+    $("facts").innerHTML = facts.map(function (x) { return "<div><dt>" + x[0] + "</dt><dd>" + x[1] + "</dd></div>"; }).join("");
+  }
+
+  $("b_play").addEventListener("click", function () { playing = !playing; $("b_play").textContent = playing ? "❚❚" : "▶"; last = null; });
+  $("b_start").addEventListener("click", function () { seek(0); refreshMesh(); updateInfo(); });
+  $("b_end").addEventListener("click", function () { busy(true); setTimeout(function () { var p = prog(); seek(p.total); refreshMesh(); updateInfo(); busy(false); }, 20); });
+  $("b_prev").addEventListener("click", function () { if (progIdx > 0) selectProg(progIdx - 1, true); });
+  $("b_next").addEventListener("click", function () { if (progIdx < sets[setIdx]["программы"].length - 1) selectProg(progIdx + 1, true); });
+  $("b_step").addEventListener("click", function () {
+    var p = prog(), s = segAt(p, playT);
+    var t = p.T[Math.min(p.D.length, s + 1)] + 1e-6;
+    seek(t); refreshMesh(); updateInfo();
+  });
+  $("slider").addEventListener("input", function () {
+    var p = prog(); seek(p.total * $("slider").value / 10000); refreshMesh(); updateInfo();
+  });
+  $("t_path").addEventListener("change", function () { pathGroup.visible = $("t_path").checked; });
+  $("t_pathall").addEventListener("change", function () { updateInfo(); });
+  $("t_pathall").checked = false;
+  $("t_colors").addEventListener("change", function () { markAll(); refreshMesh(); });
+  $("t_ghost").addEventListener("change", setGhost);
+
+  // камера: один палец или мышь — поворот; два пальца — масштаб и сдвиг; колесо — масштаб; правая кнопка — сдвиг
+  var LC = B.L / 2;
+  var VID = DATA["вид"] || {"масштаб": 1, "салон_x1": 91, "салон_x2": 91};
+  var азимут = -2.2, высота = 0.62, дистанция = 280 * VID["масштаб"], цель = new THREE.Vector3(LC, 0, B.T / 2), сдвиг = new THREE.Vector3();
+  var S_ = VID["масштаб"];
+  var РАКУРСЫ = { "34": [-2.2, 0.62, 280 * S_, null], "top": [-Math.PI / 2, 1.52, 300 * S_, null], "side": [-Math.PI / 2, 0.12, 260 * S_, null],
+                 "end": [Math.PI, 0.25, 160 * S_, null], "salon": [-2.0, 0.9, 110, [-1, -1]], "tool": [-2.3, 0.55, 45, null] };
+  function узко() { var w = canvas.clientWidth || 1, h = canvas.clientHeight || 1; return Math.max(1, 1.25 * h / w); }
+  Array.prototype.forEach.call(document.querySelectorAll("[data-view]"), function (b) {
+    b.addEventListener("click", function () {
+      var v = b.getAttribute("data-view"), r = РАКУРСЫ[v]; азимут = r[0]; высота = r[1]; дистанция = r[2] * узко(); сдвиг.set(0, 0, 0);
+      if (v === "salon") {   // салон: в первом установе X ≈ 45–130 от кормы, во втором — зеркально
+        var xs = prog()["установ"] === "Poz 1" ? VID["салон_x1"] : VID["салон_x2"];
+        сдвиг.set(xs - LC, 0, 0);
+      }
+      if (v === "tool") $("t_follow").checked = true;
+      else if (v !== "end") $("t_follow").checked = false;
+    });
+  });
+  var drag = null, пальцы = {}, щипок = null, середина = null, pan = false;
+  var ДИСТ_МИН = 8, ДИСТ_МАКС = 1200;
+  function point(e) { return { x: e.clientX, y: e.clientY }; }
+  function числоПальцев() { return Object.keys(пальцы).length; }
+  function расстояниеПальцев() { var k = Object.keys(пальцы), a = пальцы[k[0]], b = пальцы[k[1]]; return Math.hypot(a.x - b.x, a.y - b.y); }
+  function серединаПальцев() { var k = Object.keys(пальцы), a = пальцы[k[0]], b = пальцы[k[1]]; return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; }
+  var вправо = new THREE.Vector3(), вверх = new THREE.Vector3();
+  function сдвинуть(dx, dy) {
+    var h = canvas.clientHeight || 1;
+    var мир = 2 * дистанция * Math.tan(camera.fov * Math.PI / 360) / h;
+    вправо.setFromMatrixColumn(camera.matrix, 0); вверх.setFromMatrixColumn(camera.matrix, 1);
+    сдвиг.addScaledVector(вправо, -dx * мир).addScaledVector(вверх, dy * мир);
+  }
+  canvas.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+  canvas.addEventListener("pointerdown", function (e) {
+    пальцы[e.pointerId] = point(e);
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* указатель уже отпущен */ }
+    if (числоПальцев() === 2) { щипок = расстояниеПальцев(); середина = серединаПальцев(); drag = null; }
+    else if (числоПальцев() === 1) { drag = point(e); pan = e.button === 2 || e.shiftKey; }
+  });
+  canvas.addEventListener("pointermove", function (e) {
+    if (!(e.pointerId in пальцы)) return;
+    var p = point(e);
+    пальцы[e.pointerId] = p;
+    if (числоПальцев() >= 2) {
+      var d = расстояниеПальцев(), m = серединаПальцев();
+      if (щипок && d > 0) дистанция = Math.max(ДИСТ_МИН, Math.min(ДИСТ_МАКС, дистанция * щипок / d));
+      if (середина) сдвинуть(m.x - середина.x, m.y - середина.y);
+      щипок = d; середина = m;
+      return;
+    }
+    if (!drag) return;
+    if (pan) сдвинуть(p.x - drag.x, p.y - drag.y);
+    else {
+      азимут -= (p.x - drag.x) * 0.008;
+      высота = Math.max(-1.2, Math.min(1.55, высота + (p.y - drag.y) * 0.006));
+    }
+    drag = p;
+  });
+  function отпустить(e) {
+    delete пальцы[e.pointerId];
+    щипок = null; середина = null;
+    var k = Object.keys(пальцы);
+    drag = k.length === 1 ? пальцы[k[0]] : null;
+  }
+  ["pointerup", "pointercancel"].forEach(function (ev) { canvas.addEventListener(ev, отпустить); });
+  canvas.addEventListener("wheel", function (e) {
+    e.preventDefault(); дистанция = Math.max(ДИСТ_МИН, Math.min(ДИСТ_МАКС, дистанция * (1 + Math.sign(e.deltaY) * 0.1)));
+  }, { passive: false });
+
+  function resize() {
+    var w = canvas.clientWidth, h = canvas.clientHeight;
+    if (!w || !h) return;
+    if (canvas.width !== Math.round(w * renderer.getPixelRatio()) || canvas.height !== Math.round(h * renderer.getPixelRatio())) {
+      renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+    }
+  }
+  function place() {
+    var base = $("t_follow").checked ? tool.position : цель;
+    var c = new THREE.Vector3(base.x, base.y, $("t_follow").checked ? base.z : цель.z).add(сдвиг);
+    camera.position.set(c.x + дистанция * Math.cos(высота) * Math.cos(азимут),
+                        c.y + дистанция * Math.cos(высота) * Math.sin(азимут),
+                        c.z + дистанция * Math.sin(высота));
+    camera.up.set(0, 0, 1); camera.lookAt(c); camera.updateMatrixWorld();
+  }
+
+  var last = null;
+  function tick(now) {
+    resize();
+    if (playing) {
+      var dt = last === null ? 0 : Math.min(0.1, (now - last) / 1000);
+      var p = prog(), sp = parseFloat($("speed").value);
+      var t = playT + dt * sp;
+      if (t >= p.total) {
+        seek(p.total); refreshMesh(); updateInfo();
+        if ($("t_auto").checked && progIdx < sets[setIdx]["программы"].length - 1) selectProg(progIdx + 1, true);
+        else { playing = false; $("b_play").textContent = "▶"; }
+      } else { seek(t); refreshMesh(); updateInfo(); }
+    }
+    last = now;
+    place();
+    renderer.render(scene, camera);
+    requestAnimationFrame(tick);
+  }
+
+  // служебное: проверка без анимации (скрытая вкладка не рисует кадры)
+  window.СМОТРЕЛКА = {
+    к: function (доля) { var p = prog(); seek(p.total * доля); refreshMesh(); updateInfo(); resize(); place(); renderer.render(scene, camera); },
+    программа: function (i, вКонец) { selectProg(i, true, вКонец); },
+    ракурс: function (a, h, d) { азимут = a; высота = h; дистанция = d; resize(); place(); renderer.render(scene, camera); },
+    состояние: function () { var p = prog(); return { программа: p["подпись"], t: playT, всего: p.total, сетка: [NX, NY] }; },
+    отклонения: function (x0, x1, y0, y1) {
+      var tg = TGT[prog()["установ"] === "Poz 1" ? 0 : 1], v = [], g = 0;
+      for (var j = 0; j < NY; j++) for (var i = 0; i < NX; i++) {
+        var x = cx(i), y = cy(j), k = j * NX + i;
+        if (x < x0 || x > x1 || y < y0 || y > y1 || isNaN(tg[0][k]) || H[k] < -1e8) continue;
+        v.push(H[k] - tg[0][k]); if (H[k] < tg[1][k] - 0.05) g++;
+      }
+      v.sort(function (a, b) { return a - b; });
+      return { n: v.length, зарезов: g, медиана: v[v.length >> 1], п95: v[Math.floor(v.length * 0.95)], макс: v[v.length - 1] };
+    }
+  };
+
+  // ---------------- запуск ----------------
+  busy(true);
+  var T = DATA["цель"];
+  var all = [unpackTarget(T.t1hi, NaN), unpackTarget(T.t1lo, -Infinity), unpackTarget(T.t2hi, NaN), unpackTarget(T.t2lo, -Infinity)];
+  sets.forEach(function (s) { s["программы"].forEach(function (p) { all.push(unpackProgram(p)); }); });
+  Promise.all(all).then(function (r) {
+    TGT = [[r[0], r[1]], [r[2], r[3]]];
+    buildButtons(); buildProgButtons();
+    дистанция = РАКУРСЫ["34"][2] * узко();
+    selectProg(0, true);
+    requestAnimationFrame(tick);
+  }).catch(function (e) { $("note").textContent = "Не распаковалось: " + e; busy(false); });
+})();
+</script>
