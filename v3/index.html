@@ -99,7 +99,7 @@
 </div>
 
 <script src="three.min.js"></script>
-<script src="gondola-data.js?v=33417e48"></script>
+<script src="gondola-data.js?v=6e165898"></script>
 <script>
 (function () {
   var ДАННЫЕ = window.ГОНДОЛА || { варианты: [] };
@@ -236,7 +236,7 @@
   ВАРИАНТЫ.forEach(function (d, i) {
     var b = document.createElement("button");
     b.type = "button"; b.textContent = d["подпись"] || d["имя"];
-    b.addEventListener("click", function () { показать(i); });
+    b.addEventListener("click", function () { показать(i); обновитьНадпись(); следующий(); });
     document.getElementById("variants").appendChild(b);
   });
 
@@ -387,52 +387,88 @@
   }
 
   // второй этап: подробные корпус и подставка догружаются фоном и подменяют облегчённые — облегчённую уже можно
-  // крутить (Сергей, 05.10.2026: «с каждой новой ссылкой смотрелка грузится всё дольше»)
+  // крутить (Сергей, 05.10.2026: «с каждой новой ссылкой смотрелка грузится всё дольше»). Подробные — по файлу на
+  // вариант: сначала те, что нужны показанному, остальные — следом; переключили вариант — его файлы вперёд очереди
   var надпись = document.getElementById("load");
-  function догрузить() {
-    var п = ДАННЫЕ["полная"];
-    if (!п) { надпись.hidden = true; return; }
-    var всего = п["байт"], получено = 0;
-    function процент() { надпись.textContent = "Подробная модель: " + Math.min(99, Math.floor(получено / всего * 100)) + " %"; }
-    процент();
-    fetch(п["файл"]).then(function (r) {
+  var бины = (ДАННЫЕ["полные"] || []).map(function (p) { return { файл: p["файл"], байт: p["байт"], получено: 0, готов: false, ошибка: false }; });
+  function частьБин(ч) {
+    if (ч["полная"]) return ч["полная"]["бин"];
+    if (ч["как"]) { var s = ВАРИАНТЫ[ч["как"][0]]["части"][ч["как"][1]]; return s["полная"] ? s["полная"]["бин"] : null; }
+    return null;
+  }
+  function нужные(i) {
+    var out = [];
+    ВАРИАНТЫ[i]["части"].forEach(function (ч) { var b = частьБин(ч); if (b != null && out.indexOf(b) < 0) out.push(b); });
+    return out;
+  }
+  function обновитьНадпись() {
+    var н = нужные(текущий).map(function (k) { return бины[k]; }).filter(function (b) { return !b.готов && !b.ошибка; });
+    if (!н.length) { if (!надпись.dataset.ошибка) надпись.hidden = true; return; }
+    var всего = 0, получено = 0;
+    н.forEach(function (b) { всего += b.байт; получено += b.получено; });
+    надпись.hidden = false;
+    надпись.textContent = "Подробная модель: " + Math.min(99, Math.floor(получено / всего * 100)) + " %";
+  }
+  function грузитьБин(k) {
+    var бин = бины[k];
+    return fetch(бин.файл).then(function (r) {
       if (!r.ok) throw new Error("HTTP " + r.status);
       if (!r.body || !r.body.getReader) return r.arrayBuffer();
-      var буфер = new Uint8Array(всего), чтец = r.body.getReader();
+      var буфер = new Uint8Array(бин.байт), чтец = r.body.getReader();
       function кусок() {
         return чтец.read().then(function (x) {
           if (x.done) return буфер.buffer;
-          if (получено + x.value.length > буфер.length) {
-            var б = new Uint8Array(получено + x.value.length); б.set(буфер); буфер = б;
+          if (бин.получено + x.value.length > буфер.length) {
+            var б = new Uint8Array(бин.получено + x.value.length); б.set(буфер); буфер = б;
           }
-          буфер.set(x.value, получено); получено += x.value.length; процент();
+          буфер.set(x.value, бин.получено); бин.получено += x.value.length; обновитьНадпись();
           return кусок();
         });
       }
       return кусок();
     }).then(function (buf) {
-      if (buf.byteLength < всего) throw new Error("файл неполный");
+      if (buf.byteLength < бин.байт) throw new Error("файл неполный");
       var ждать = [];
       ВАРИАНТЫ.forEach(function (d) { d["части"].forEach(function (ч) {
         var f = ч["полная"];
-        if (!f) return;
-        function часть(k) { return f[k] ? распаковать1(buf.slice(f[k][0], f[k][0] + f[k][1])) : Promise.resolve(undefined); }
+        if (!f || f["бин"] !== k) return;
+        function часть(n) { return f[n] ? распаковать1(buf.slice(f[n][0], f[n][0] + f[n][1])) : Promise.resolve(undefined); }
         ждать.push(Promise.all([часть("позиции"), часть("индексы"), часть("нормали")]).then(function (r) {
           return { ч: ч, f: f, r: r };
         }));
       }); });
       return Promise.all(ждать);
     }).then(function (готово) {
-      // подмена разом, когда распакованы все части
+      // подмена разом, когда распакованы все части файла
       готово.forEach(function (g) {
         g.ч._pos = g.r[0]; g.ч._idx = g.r[1]; g.ч._nrm = g.r[2];
         g.ч["шаг"] = g.f["шаг"]; g.ч["биты_индексов"] = g.f["биты_индексов"];
       });
-      связать(); показать(текущий); перекрасить();
-      надпись.hidden = true;
+      связать();
+      бин.готов = true;
+    });
+  }
+  var занят = false;
+  function следующий() {
+    if (занят) return;
+    var очередь = нужные(текущий).concat(бины.map(function (_, k) { return k; }));
+    var k = очередь.filter(function (j) { return !бины[j].готов && !бины[j].ошибка; })[0];
+    обновитьНадпись();
+    if (k == null) return;
+    занят = true;
+    грузитьБин(k).then(function () {
+      занят = false;
+      var н = нужные(текущий);
+      if (н.indexOf(k) >= 0 && н.every(function (j) { return бины[j].готов || бины[j].ошибка; })) { показать(текущий); перекрасить(); }
+      следующий();
     }).catch(function (e) {
-      надпись.textContent = "Подробная модель не загрузилась — показана упрощённая";
-      setTimeout(function () { надпись.hidden = true; }, 8000);
+      занят = false; бины[k].ошибка = true;
+      if (нужные(текущий).indexOf(k) >= 0) {
+        надпись.hidden = false; надпись.dataset.ошибка = "1";
+        надпись.textContent = "Подробная модель не загрузилась — показана упрощённая";
+        setTimeout(function () { delete надпись.dataset.ошибка; обновитьНадпись(); }, 8000);
+      }
+      следующий();
     });
   }
 
@@ -443,7 +479,7 @@
       связать();
       показать(ДАННЫЕ["начать_с"] != null ? ДАННЫЕ["начать_с"] : ВАРИАНТЫ.length - 1);
       перекрасить(); tick();
-      догрузить();
+      следующий();
     }).catch(function (e) { надпись.hidden = true; document.getElementById("desc").textContent = "Модель не распаковалась: " + e; });
   } else { надпись.hidden = true; document.getElementById("desc").textContent = "Модель не загрузилась."; }
 })();
