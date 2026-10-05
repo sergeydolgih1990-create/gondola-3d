@@ -62,7 +62,7 @@
 
   <div class="stage">
     <canvas id="c"></canvas>
-    <div class="hint">тяните — поворот · колесо или два пальца — масштаб</div>
+    <div class="hint">тяните — поворот · правая кнопка или Shift — сдвиг · колесо — масштаб к курсору · двойной щелчок — в центр<br>телефон: два пальца — масштаб и сдвиг, двойное касание — в центр</div>
   </div>
 
   <div class="row" role="group" aria-label="Ракурс">
@@ -270,11 +270,18 @@
     вправо.setFromMatrixColumn(camera.matrix, 0); вверх.setFromMatrixColumn(camera.matrix, 1);
     сдвиг.addScaledVector(вправо, -dx * мир).addScaledVector(вверх, dy * мир);
   }
+  // мышь: правая или средняя кнопка, Shift или Ctrl с левой — сдвиг модели в окне (Сергей, 05.10.2026: «приближаю
+  // корму — она уходит за рамку, подвинуть к центру нельзя»)
+  var режимСдвига = false;
+  canvas.addEventListener("contextmenu", function (e) { e.preventDefault(); });
   canvas.addEventListener("pointerdown", function (e) {
     пальцы[e.pointerId] = point(e);
     try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* указатель уже отпущен */ }
     if (числоПальцев() === 2) { щипок = расстояниеПальцев(); середина = серединаПальцев(); drag = null; }
-    else if (числоПальцев() === 1) { drag = point(e); }
+    else if (числоПальцев() === 1) {
+      drag = point(e);
+      режимСдвига = e.pointerType === "mouse" && (e.button === 1 || e.button === 2 || e.shiftKey || e.ctrlKey);
+    }
     document.getElementById("spin").checked = false;
   });
   canvas.addEventListener("pointermove", function (e) {
@@ -289,21 +296,56 @@
       return;
     }
     if (!drag) return;
+    if (режимСдвига) { сдвинуть(p.x - drag.x, p.y - drag.y); drag = p; return; }
     азимут -= (p.x - drag.x) * 0.008;
     высота = Math.max(-1.2, Math.min(1.55, высота + (p.y - drag.y) * 0.006));
     drag = p;
   });
+  // двойное касание на телефоне — как двойной щелчок
+  var прошлоеКасание = null;
   function отпустить(e) {
+    if (e.type === "pointerup" && e.pointerType === "touch" && числоПальцев() === 1) {
+      var t = performance.now(), q = point(e);
+      if (прошлоеКасание && t - прошлоеКасание.t < 320 && Math.hypot(q.x - прошлоеКасание.x, q.y - прошлоеКасание.y) < 30) {
+        вЦентр(q.x, q.y); прошлоеКасание = null;
+      } else { прошлоеКасание = { t: t, x: q.x, y: q.y }; }
+    }
+    режимСдвига = false;
     delete пальцы[e.pointerId];
     щипок = null; середина = null;
     var k = Object.keys(пальцы);
     drag = k.length === 1 ? пальцы[k[0]] : null;
   }
   ["pointerup", "pointercancel"].forEach(function (ev) { canvas.addEventListener(ev, отпустить); });
+  // точка под курсором на плоскости через цель поперёк взгляда — к ней приближаем колесом
+  var луч = new THREE.Raycaster(), мышь = new THREE.Vector2(), плоскость = new THREE.Plane(), точка = new THREE.Vector3();
+  function лучИз(x, y) {
+    var r = canvas.getBoundingClientRect();
+    мышь.set((x - r.left) / r.width * 2 - 1, -(y - r.top) / r.height * 2 + 1);
+    луч.setFromCamera(мышь, camera);
+  }
   canvas.addEventListener("wheel", function (e) {
     e.preventDefault();
+    var было = дистанция;
     дистанция = Math.max(ДИСТ_МИН, Math.min(ДИСТ_МАКС, дистанция * (1 + Math.sign(e.deltaY) * 0.1)));
+    var k = дистанция / было;
+    if (k === 1) return;
+    лучИз(e.clientX, e.clientY);
+    var взгляд = new THREE.Vector3(); camera.getWorldDirection(взгляд);
+    плоскость.setFromNormalAndCoplanarPoint(взгляд, цель);
+    if (луч.ray.intersectPlane(плоскость, точка)) сдвиг.addScaledVector(точка.sub(цель), 1 - k);
   }, { passive: false });
+  // двойной щелчок по модели — эта точка становится центром: вращение и масштаб вокруг неё
+  function вЦентр(x, y) {
+    if (!модель) return;
+    лучИз(x, y);
+    var hit = луч.intersectObjects(модель.children, false)[0];
+    if (!hit) return;
+    var c = цельКрупно || центр;
+    сдвиг.set(hit.point.x - c[0], hit.point.y - c[1], hit.point.z - c[2]);
+    document.getElementById("spin").checked = false;
+  }
+  canvas.addEventListener("dblclick", function (e) { вЦентр(e.clientX, e.clientY); });
 
   function resize() {
     var w = canvas.clientWidth, h = canvas.clientHeight;
