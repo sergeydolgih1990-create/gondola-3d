@@ -41,6 +41,10 @@
   .hint { position: absolute; left: 12px; bottom: 10px; font-family: "IBM Plex Mono", ui-monospace, monospace;
           font-size: 11px; letter-spacing: 0.04em; color: var(--muted);
           background: color-mix(in srgb, var(--panel) 82%, transparent); padding: 3px 7px; border-radius: 2px; }
+  .load { position: absolute; right: 12px; top: 10px; font-family: "IBM Plex Mono", ui-monospace, monospace;
+          font-size: 12px; letter-spacing: 0.03em; color: var(--muted); pointer-events: none;
+          background: color-mix(in srgb, var(--panel) 82%, transparent); padding: 3px 8px; border-radius: 2px; }
+  .load[hidden] { display: none; }
   .toggles { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; color: var(--muted); }
   .toggles label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
   .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); background: var(--panel);
@@ -62,6 +66,7 @@
 
   <div class="stage">
     <canvas id="c"></canvas>
+    <div class="load" id="load" role="status">Загружается модель…</div>
     <div class="hint">тяните — поворот · правая кнопка или Shift — сдвиг · колесо — масштаб к курсору · двойной щелчок — в центр<br>телефон: два пальца — масштаб и сдвиг, двойное касание — в центр</div>
   </div>
 
@@ -94,7 +99,7 @@
 </div>
 
 <script src="three.min.js"></script>
-<script src="gondola-data.js?v=9d0895cb"></script>
+<script src="gondola-data.js?v=33417e48"></script>
 <script>
 (function () {
   var ДАННЫЕ = window.ГОНДОЛА || { варианты: [] };
@@ -142,8 +147,9 @@
     for (var i = 0; i < bin.length; i++) view[i] = bin.charCodeAt(i);
     return buf;
   }
-  function распаковать1(b64) {
-    var stream = new Blob([buffer(b64)]).stream().pipeThrough(new DecompressionStream("deflate"));
+  // сжатый кусок: строкой base64 (в файле данных) или двоичным куском (из файла подробной модели)
+  function распаковать1(src) {
+    var stream = new Blob([typeof src === "string" ? buffer(src) : src]).stream().pipeThrough(new DecompressionStream("deflate"));
     return new Response(stream).arrayBuffer();
   }
   function распаковать(d) {
@@ -371,19 +377,74 @@
     requestAnimationFrame(tick);
   }
 
+  // часть может ссылаться на такую же у другого варианта ("как": [вариант, часть]) — один корпус на все кнопки
+  function связать() {
+    ВАРИАНТЫ.forEach(function (d) { d["части"].forEach(function (ч) {
+      if (!ч["как"]) return;
+      var s = ВАРИАНТЫ[ч["как"][0]]["части"][ч["как"][1]];
+      ч._pos = s._pos; ч._idx = s._idx; ч._nrm = s._nrm; ч["шаг"] = s["шаг"]; ч["биты_индексов"] = s["биты_индексов"];
+    }); });
+  }
+
+  // второй этап: подробные корпус и подставка догружаются фоном и подменяют облегчённые — облегчённую уже можно
+  // крутить (Сергей, 05.10.2026: «с каждой новой ссылкой смотрелка грузится всё дольше»)
+  var надпись = document.getElementById("load");
+  function догрузить() {
+    var п = ДАННЫЕ["полная"];
+    if (!п) { надпись.hidden = true; return; }
+    var всего = п["байт"], получено = 0;
+    function процент() { надпись.textContent = "Подробная модель: " + Math.min(99, Math.floor(получено / всего * 100)) + " %"; }
+    процент();
+    fetch(п["файл"]).then(function (r) {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      if (!r.body || !r.body.getReader) return r.arrayBuffer();
+      var буфер = new Uint8Array(всего), чтец = r.body.getReader();
+      function кусок() {
+        return чтец.read().then(function (x) {
+          if (x.done) return буфер.buffer;
+          if (получено + x.value.length > буфер.length) {
+            var б = new Uint8Array(получено + x.value.length); б.set(буфер); буфер = б;
+          }
+          буфер.set(x.value, получено); получено += x.value.length; процент();
+          return кусок();
+        });
+      }
+      return кусок();
+    }).then(function (buf) {
+      if (buf.byteLength < всего) throw new Error("файл неполный");
+      var ждать = [];
+      ВАРИАНТЫ.forEach(function (d) { d["части"].forEach(function (ч) {
+        var f = ч["полная"];
+        if (!f) return;
+        function часть(k) { return f[k] ? распаковать1(buf.slice(f[k][0], f[k][0] + f[k][1])) : Promise.resolve(undefined); }
+        ждать.push(Promise.all([часть("позиции"), часть("индексы"), часть("нормали")]).then(function (r) {
+          return { ч: ч, f: f, r: r };
+        }));
+      }); });
+      return Promise.all(ждать);
+    }).then(function (готово) {
+      // подмена разом, когда распакованы все части
+      готово.forEach(function (g) {
+        g.ч._pos = g.r[0]; g.ч._idx = g.r[1]; g.ч._nrm = g.r[2];
+        g.ч["шаг"] = g.f["шаг"]; g.ч["биты_индексов"] = g.f["биты_индексов"];
+      });
+      связать(); показать(текущий); перекрасить();
+      надпись.hidden = true;
+    }).catch(function (e) {
+      надпись.textContent = "Подробная модель не загрузилась — показана упрощённая";
+      setTimeout(function () { надпись.hidden = true; }, 8000);
+    });
+  }
+
   if (ВАРИАНТЫ.length) {
     var все = [];
-    // часть может ссылаться на такую же у другого варианта ("как": [вариант, часть]) — один корпус на все кнопки
     ВАРИАНТЫ.forEach(function (d) { d["части"].forEach(function (ч) { if (!ч["как"]) все.push(распаковать(ч)); }); });
     Promise.all(все).then(function () {
-      ВАРИАНТЫ.forEach(function (d) { d["части"].forEach(function (ч) {
-        if (!ч["как"]) return;
-        var s = ВАРИАНТЫ[ч["как"][0]]["части"][ч["как"][1]];
-        ч._pos = s._pos; ч._idx = s._idx; ч._nrm = s._nrm; ч["шаг"] = s["шаг"]; ч["биты_индексов"] = s["биты_индексов"];
-      }); });
+      связать();
       показать(ДАННЫЕ["начать_с"] != null ? ДАННЫЕ["начать_с"] : ВАРИАНТЫ.length - 1);
       перекрасить(); tick();
-    }).catch(function (e) { document.getElementById("desc").textContent = "Модель не распаковалась: " + e; });
-  } else { document.getElementById("desc").textContent = "Модель не загрузилась."; }
+      догрузить();
+    }).catch(function (e) { надпись.hidden = true; document.getElementById("desc").textContent = "Модель не распаковалась: " + e; });
+  } else { надпись.hidden = true; document.getElementById("desc").textContent = "Модель не загрузилась."; }
 })();
 </script>
