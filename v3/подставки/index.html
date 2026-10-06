@@ -1,0 +1,486 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Гондола — 3D-модель</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  :root {
+    --ground: #e9edee;
+    --panel: #f7f9f9;
+    --ink: #13191c;
+    --muted: #5d6a6f;
+    --line: #c6d0d2;
+    --accent: #1f6f8b;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #101618; --panel: #182023; --ink: #e8eded; --muted: #94a3a8; --line: #2b383c; --accent: #5bb2cf;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #101618; --panel: #182023; --ink: #e8eded; --muted: #94a3a8; --line: #2b383c; --accent: #5bb2cf;
+    color-scheme: dark;
+  }
+  html { height: 100%; }
+  body { margin: 0; background: var(--ground); color: var(--ink);
+         font-family: "IBM Plex Sans", system-ui, "Segoe UI", sans-serif; font-size: 15px; line-height: 1.5; }
+  .wrap { min-height: 100vh; display: flex; flex-direction: column; gap: 14px; padding: 20px 16px 24px;
+          max-width: 1180px; margin: 0 auto; box-sizing: border-box; }
+  header h1 { font-size: 21px; font-weight: 600; margin: 0 0 4px; text-wrap: balance; }
+  header p { margin: 0; color: var(--muted); font-size: 14px; max-width: 72ch; }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .row .label { font-size: 13px; color: var(--muted); margin-right: 2px; min-width: 64px; }
+  .row button { font: inherit; font-size: 14px; padding: 7px 13px; border: 1px solid var(--line); border-radius: 3px;
+                background: var(--panel); color: var(--ink); cursor: pointer; }
+  .row button[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); font-weight: 500; }
+  .row button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .stage { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 3px;
+           min-height: 380px; height: 62vh; overflow: hidden; }
+  .stage canvas { display: block; width: 100%; height: 100%; touch-action: none; }
+  .hint { position: absolute; left: 12px; bottom: 10px; font-family: "IBM Plex Mono", ui-monospace, monospace;
+          font-size: 11px; letter-spacing: 0.04em; color: var(--muted);
+          background: color-mix(in srgb, var(--panel) 82%, transparent); padding: 3px 7px; border-radius: 2px; }
+  .load { position: absolute; right: 12px; top: 10px; font-family: "IBM Plex Mono", ui-monospace, monospace;
+          font-size: 12px; letter-spacing: 0.03em; color: var(--muted); pointer-events: none;
+          background: color-mix(in srgb, var(--panel) 82%, transparent); padding: 3px 8px; border-radius: 2px; }
+  .load[hidden] { display: none; }
+  .toggles { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; color: var(--muted); }
+  .toggles label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
+  .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); background: var(--panel);
+           border: 1px solid var(--line); border-radius: 3px; overflow: hidden; margin: 0; }
+  .facts div { padding: 10px 14px; box-shadow: 1px 0 0 var(--line), 0 1px 0 var(--line); }
+  .facts dt { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); margin: 0 0 2px; }
+  .facts dd { margin: 0; font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 17px; font-variant-numeric: tabular-nums; }
+  .note { color: var(--muted); font-size: 13px; margin: 0; max-width: 76ch; }
+  @media (max-width: 640px) { .stage { min-height: 300px; } }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1 id="t-h1">Гондола — 3D-модель</h1>
+    <p id="t-lead"></p>
+  </header>
+
+  <div class="row" id="variants" role="group" aria-label="Вариант"></div>
+
+  <div class="stage">
+    <canvas id="c"></canvas>
+    <div class="load" id="load" role="status">Загружается модель…</div>
+    <div class="hint">тяните — поворот · правая кнопка или Shift — сдвиг · колесо — масштаб к курсору · двойной щелчок — в центр<br>телефон: два пальца — масштаб и сдвиг, двойное касание — в центр</div>
+  </div>
+
+  <div class="row" role="group" aria-label="Ракурс">
+    <span class="label">Ракурс</span>
+    <button type="button" data-view="34">3/4</button>
+    <button type="button" data-view="side">сбоку</button>
+    <button type="button" data-view="top">сверху</button>
+    <button type="button" data-view="front">с носа</button>
+    <button type="button" data-view="bow">нос крупно</button>
+    <button type="button" data-view="stern">корма крупно</button>
+  </div>
+
+  <div class="row" role="group" aria-label="Цвет" id="woodRow">
+    <span class="label">Цвет</span>
+    <button type="button" data-wood="light">светлое дерево</button>
+    <button type="button" data-wood="dark">морёный дуб</button>
+    <button type="button" data-wood="gray">серый</button>
+  </div>
+
+  <div class="toggles">
+    <label><input type="checkbox" id="dims" autocomplete="off"> размеры</label>
+    <label><input type="checkbox" id="spin"> автоповорот</label>
+  </div>
+
+  <dl class="facts" id="facts"></dl>
+
+  <p class="note" id="desc"></p>
+  <p class="note" id="t-note"></p>
+</div>
+
+<script src="three.min.js"></script>
+<script src="gondola-data.js?v=a215f57b"></script>
+<script>
+(function () {
+  var ДАННЫЕ = window.ГОНДОЛА || { варианты: [] };
+  var ШАПКА = ДАННЫЕ["шапка"];
+  if (ШАПКА) {
+    if (ШАПКА.title) document.title = ШАПКА.title;
+    [["t-h1", "h1"], ["t-lead", "lead"], ["t-note", "note"]].forEach(function (p) {
+      var el = document.getElementById(p[0]);
+      if (el && ШАПКА[p[1]] != null) el.textContent = ШАПКА[p[1]];
+    });
+  }
+  var ВАРИАНТЫ = ДАННЫЕ["варианты"];
+  // размеры при открытии и обновлении страницы выключены — только галочкой (Сергей, 27.09)
+  document.getElementById("dims").checked = false;
+
+  var canvas = document.getElementById("c");
+  var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  var scene = new THREE.Scene();
+  var camera = new THREE.PerspectiveCamera(30, 1, 1, 5000);
+  scene.add(new THREE.HemisphereLight(0xffffff, 0x9aa7ab, 0.7));
+  var key = new THREE.DirectionalLight(0xffffff, 0.9); key.position.set(-260, -420, 520); scene.add(key);
+  var fill = new THREE.DirectionalLight(0xffffff, 0.45); fill.position.set(380, -120, 220); scene.add(fill);
+  var rim = new THREE.DirectionalLight(0xffffff, 0.35); rim.position.set(0, 400, 300); scene.add(rim);
+
+  var grid = new THREE.GridHelper(200, 20, 0x8a979c, 0x8a979c);
+  grid.rotation.x = Math.PI / 2; grid.material.transparent = true; grid.material.opacity = 0.28; scene.add(grid);
+
+  // цвета по роли детали; дерево переключается кнопками
+  var ДЕРЕВО = { light: [0xd2ae80, 0.62], dark: [0x3e2c20, 0.55], gray: [0xa3a7aa, 0.7] };   // серый — оценить форму без цвета
+  var РОЛИ = { "латунь": [0xc9a24a, 0.32, 0.55], "металлостикер": [0xd9d6cf, 0.3, 0.4] };
+  // подставка — своим тоном, контрастно к лодке (Сергей, 02.10: «подставка того же цвета, что и лодка»)
+  var ПОДСТАВКА = { light: [0x5c4130, 0.6], dark: [0xcdb08a, 0.62], gray: [0x6d5848, 0.65] };
+  var дерево = "light";
+  function тон(r) { return r === "подставка" ? ПОДСТАВКА[дерево] : ДЕРЕВО[дерево]; }
+  function материал(ч) {
+    var r = ч["роль"], c, rough, metal = 0;
+    if (РОЛИ[r]) { c = РОЛИ[r][0]; rough = РОЛИ[r][1]; metal = РОЛИ[r][2]; }
+    else { c = тон(r)[0]; rough = тон(r)[1]; }
+    return new THREE.MeshStandardMaterial({ color: c, roughness: rough, metalness: metal });
+  }
+
+  function buffer(b64) {
+    var bin = atob(b64), buf = new ArrayBuffer(bin.length), view = new Uint8Array(buf);
+    for (var i = 0; i < bin.length; i++) view[i] = bin.charCodeAt(i);
+    return buf;
+  }
+  // сжатый кусок: строкой base64 (в файле данных) или двоичным куском (из файла подробной модели)
+  function распаковать1(src) {
+    var stream = new Blob([typeof src === "string" ? buffer(src) : src]).stream().pipeThrough(new DecompressionStream("deflate"));
+    return new Response(stream).arrayBuffer();
+  }
+  function распаковать(d) {
+    var ч = [распаковать1(d["позиции"]), распаковать1(d["индексы"])];
+    if (d["нормали"]) ч.push(распаковать1(d["нормали"]));
+    return Promise.all(ч).then(function (r) { d._pos = r[0]; d._idx = r[1]; d._nrm = r[2]; });
+  }
+  function geometryFrom(d) {
+    var q = new Int16Array(d._pos), pos = new Float32Array(q.length), шаг = d["шаг"];
+    for (var i = 0; i < q.length; i++) pos[i] = q[i] * шаг;
+    var idx = d["биты_индексов"] === 32 ? new Uint32Array(d._idx) : new Uint16Array(d._idx);
+    var geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    geo.setIndex(new THREE.BufferAttribute(idx, 1));
+    // готовые нормали с резкими острыми кромками (если есть), иначе — средние по вершинам
+    if (d._nrm) { geo.setAttribute("normal", new THREE.BufferAttribute(new Int8Array(d._nrm), 3, true)); }
+    else { geo.computeVertexNormals(); }
+    return geo;
+  }
+
+  // размеры: линии и подпись, текст всегда к зрителю
+  var размеры = new THREE.Group(); scene.add(размеры);
+  var линииМат = new THREE.LineBasicMaterial({ color: 0x34444a });
+  function холст(текст) {
+    var px = 64, font = "500 " + px + "px 'IBM Plex Sans', system-ui, sans-serif";
+    var cv = document.createElement("canvas"), cx = cv.getContext("2d");
+    cx.font = font;
+    var w = Math.ceil(cx.measureText(текст).width) + 24, h = px + 24;
+    cv.width = w; cv.height = h; cx = cv.getContext("2d"); cx.font = font;
+    cx.fillStyle = "#34444a"; cx.textBaseline = "middle"; cx.fillText(текст, 12, h / 2);
+    var tex = new THREE.CanvasTexture(cv); tex.anisotropy = 4;
+    return { tex: tex, aspect: w / h };
+  }
+  function размер(r) {
+    var g = new THREE.Group(), pts = [];
+    r["линии"].forEach(function (L) { pts.push(new THREE.Vector3(L[0][0], L[0][1], L[0][2]), new THREE.Vector3(L[1][0], L[1][1], L[1][2])); });
+    g.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts), линииМат));
+    var h = холст(r["текст"]), hh = r["высота"] || 4;
+    var m = new THREE.Sprite(new THREE.SpriteMaterial({ map: h.tex, depthWrite: false }));
+    m.scale.set(hh * h.aspect, hh, 1);
+    m.position.set(r["позиция"][0], r["позиция"][1], r["позиция"][2]);
+    g.add(m);
+    return g;
+  }
+  function обновитьРазмеры() { размеры.visible = document.getElementById("dims").checked; }
+  document.getElementById("dims").addEventListener("change", обновитьРазмеры);
+
+  var модель = null, центр = [0, 0, 20], текущий = 0;
+  function показать(i) {
+    текущий = i;
+    var d = ВАРИАНТЫ[i];
+    if (модель) { scene.remove(модель); модель.traverse(function (m) { if (m.geometry) m.geometry.dispose(); if (m.material) m.material.dispose(); }); }
+    модель = new THREE.Group();
+    d["части"].forEach(function (ч) {
+      var m = new THREE.Mesh(geometryFrom(ч), материал(ч));
+      m.userData.роль = ч["роль"];
+      модель.add(m);
+    });
+    scene.add(модель);
+    while (размеры.children.length) {
+      var og = размеры.children.pop();
+      og.traverse(function (o) { if (o.geometry) o.geometry.dispose(); if (o.material && o.material !== линииМат) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } });
+    }
+    (d["размеры"] || []).forEach(function (r) { размеры.add(размер(r)); });
+    обновитьРазмеры();
+    центр = d["центр"] || центр;
+    grid.position.set(центр[0], центр[1], d["стол"] || 0);
+    document.getElementById("facts").innerHTML = (d["факты"] || []).map(function (f) { return "<div><dt>" + f[0] + "</dt><dd>" + f[1] + "</dd></div>"; }).join("");
+    document.getElementById("desc").textContent = d["описание"] || "";
+    Array.prototype.forEach.call(document.querySelectorAll("#variants button"), function (b, k) { b.setAttribute("aria-pressed", k === i ? "true" : "false"); });
+  }
+  function перекрасить() {
+    if (!модель) return;
+    модель.children.forEach(function (m) {
+      if (РОЛИ[m.userData.роль]) return;
+      var t = тон(m.userData.роль); m.material.color.setHex(t[0]); m.material.roughness = t[1];
+    });
+    Array.prototype.forEach.call(document.querySelectorAll("[data-wood]"), function (b) { b.setAttribute("aria-pressed", b.getAttribute("data-wood") === дерево ? "true" : "false"); });
+  }
+  Array.prototype.forEach.call(document.querySelectorAll("[data-wood]"), function (b) {
+    b.addEventListener("click", function () { дерево = b.getAttribute("data-wood"); перекрасить(); });
+  });
+
+  ВАРИАНТЫ.forEach(function (d, i) {
+    var b = document.createElement("button");
+    b.type = "button"; b.textContent = d["подпись"] || d["имя"];
+    b.addEventListener("click", function () { показать(i); обновитьНадпись(); следующий(); });
+    document.getElementById("variants").appendChild(b);
+  });
+
+  var азимут = -2.3, высота = 0.35, дистанция = 270;
+  var РАКУРСЫ = { "34": [-2.3, 0.35, 270, null], "side": [-Math.PI / 2, 0.02, 280, null], "top": [-Math.PI / 2, 1.53, 290, null],
+                  "front": [0.0, 0.12, 230, null], "bow": [-0.9, 0.22, 90, "нос"], "stern": [-2.4, 0.3, 90, "корма"] };
+  var цельКрупно = null;
+  Array.prototype.forEach.call(document.querySelectorAll("[data-view]"), function (b) {
+    b.addEventListener("click", function () {
+      var r = РАКУРСЫ[b.getAttribute("data-view")];
+      азимут = r[0]; высота = r[1]; дистанция = r[2];
+      var d = ВАРИАНТЫ[текущий];
+      цельКрупно = r[3] && d["точки"] ? d["точки"][r[3]] : null;
+      сдвиг.set(0, 0, 0);
+      document.getElementById("spin").checked = false;
+    });
+  });
+
+  // один палец или мышь — поворот; два пальца — масштаб (щипок); колесо — масштаб
+  var drag = null, пальцы = {}, щипок = null, середина = null;
+  var сдвиг = new THREE.Vector3();          // сдвиг цели двумя пальцами; кнопки ракурсов его сбрасывают
+  var ДИСТ_МИН = 12, ДИСТ_МАКС = 900;
+  function point(e) { return { x: e.clientX, y: e.clientY }; }
+  function числоПальцев() { return Object.keys(пальцы).length; }
+  function расстояниеПальцев() {
+    var k = Object.keys(пальцы), a = пальцы[k[0]], b = пальцы[k[1]];
+    return Math.hypot(a.x - b.x, a.y - b.y);
+  }
+  function серединаПальцев() {
+    var k = Object.keys(пальцы), a = пальцы[k[0]], b = пальцы[k[1]];
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  }
+  var вправо = new THREE.Vector3(), вверх = new THREE.Vector3();
+  function сдвинуть(dx, dy) {
+    var h = canvas.clientHeight || 1;
+    var мир = 2 * camera.position.distanceTo(цель) * Math.tan(camera.fov * Math.PI / 360) / h;
+    вправо.setFromMatrixColumn(camera.matrix, 0); вверх.setFromMatrixColumn(camera.matrix, 1);
+    сдвиг.addScaledVector(вправо, -dx * мир).addScaledVector(вверх, dy * мир);
+  }
+  // мышь: правая или средняя кнопка, Shift или Ctrl с левой — сдвиг модели в окне (Сергей, 05.10.2026: «приближаю
+  // корму — она уходит за рамку, подвинуть к центру нельзя»)
+  var режимСдвига = false;
+  canvas.addEventListener("contextmenu", function (e) { e.preventDefault(); });
+  canvas.addEventListener("pointerdown", function (e) {
+    пальцы[e.pointerId] = point(e);
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) { /* указатель уже отпущен */ }
+    if (числоПальцев() === 2) { щипок = расстояниеПальцев(); середина = серединаПальцев(); drag = null; }
+    else if (числоПальцев() === 1) {
+      drag = point(e);
+      режимСдвига = e.pointerType === "mouse" && (e.button === 1 || e.button === 2 || e.shiftKey || e.ctrlKey);
+    }
+    document.getElementById("spin").checked = false;
+  });
+  canvas.addEventListener("pointermove", function (e) {
+    if (!(e.pointerId in пальцы)) return;
+    var p = point(e);
+    пальцы[e.pointerId] = p;
+    if (числоПальцев() >= 2) {
+      var d = расстояниеПальцев(), m = серединаПальцев();
+      if (щипок && d > 0) дистанция = Math.max(ДИСТ_МИН, Math.min(ДИСТ_МАКС, дистанция * щипок / d));
+      if (середина) сдвинуть(m.x - середина.x, m.y - середина.y);
+      щипок = d; середина = m;
+      return;
+    }
+    if (!drag) return;
+    if (режимСдвига) { сдвинуть(p.x - drag.x, p.y - drag.y); drag = p; return; }
+    азимут -= (p.x - drag.x) * 0.008;
+    высота = Math.max(-1.2, Math.min(1.55, высота + (p.y - drag.y) * 0.006));
+    drag = p;
+  });
+  // двойное касание на телефоне — как двойной щелчок
+  var прошлоеКасание = null;
+  function отпустить(e) {
+    if (e.type === "pointerup" && e.pointerType === "touch" && числоПальцев() === 1) {
+      var t = performance.now(), q = point(e);
+      if (прошлоеКасание && t - прошлоеКасание.t < 320 && Math.hypot(q.x - прошлоеКасание.x, q.y - прошлоеКасание.y) < 30) {
+        вЦентр(q.x, q.y); прошлоеКасание = null;
+      } else { прошлоеКасание = { t: t, x: q.x, y: q.y }; }
+    }
+    режимСдвига = false;
+    delete пальцы[e.pointerId];
+    щипок = null; середина = null;
+    var k = Object.keys(пальцы);
+    drag = k.length === 1 ? пальцы[k[0]] : null;
+  }
+  ["pointerup", "pointercancel"].forEach(function (ev) { canvas.addEventListener(ev, отпустить); });
+  // точка под курсором на плоскости через цель поперёк взгляда — к ней приближаем колесом
+  var луч = new THREE.Raycaster(), мышь = new THREE.Vector2(), плоскость = new THREE.Plane(), точка = new THREE.Vector3();
+  function лучИз(x, y) {
+    var r = canvas.getBoundingClientRect();
+    мышь.set((x - r.left) / r.width * 2 - 1, -(y - r.top) / r.height * 2 + 1);
+    луч.setFromCamera(мышь, camera);
+  }
+  canvas.addEventListener("wheel", function (e) {
+    e.preventDefault();
+    var было = дистанция;
+    дистанция = Math.max(ДИСТ_МИН, Math.min(ДИСТ_МАКС, дистанция * (1 + Math.sign(e.deltaY) * 0.1)));
+    var k = дистанция / было;
+    if (k === 1) return;
+    лучИз(e.clientX, e.clientY);
+    var взгляд = new THREE.Vector3(); camera.getWorldDirection(взгляд);
+    плоскость.setFromNormalAndCoplanarPoint(взгляд, цель);
+    if (луч.ray.intersectPlane(плоскость, точка)) сдвиг.addScaledVector(точка.sub(цель), 1 - k);
+  }, { passive: false });
+  // двойной щелчок по модели — эта точка становится центром: вращение и масштаб вокруг неё
+  function вЦентр(x, y) {
+    if (!модель) return;
+    лучИз(x, y);
+    var hit = луч.intersectObjects(модель.children, false)[0];
+    if (!hit) return;
+    var c = цельКрупно || центр;
+    сдвиг.set(hit.point.x - c[0], hit.point.y - c[1], hit.point.z - c[2]);
+    document.getElementById("spin").checked = false;
+  }
+  canvas.addEventListener("dblclick", function (e) { вЦентр(e.clientX, e.clientY); });
+
+  function resize() {
+    var w = canvas.clientWidth, h = canvas.clientHeight;
+    if (!w || !h) return;
+    if (canvas.width !== w * renderer.getPixelRatio() || canvas.height !== h * renderer.getPixelRatio()) {
+      renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+    }
+  }
+  var reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var цель = new THREE.Vector3();
+  function tick() {
+    resize();
+    if (document.getElementById("spin").checked && !reduced) азимут += 0.003;
+    var c = цельКрупно || центр;
+    цель.set(c[0], c[1], c[2]).add(сдвиг);
+    // узкий экран (телефон): длинная лодка не влезает по ширине — камера отходит дальше
+    var дист = дистанция * Math.max(1, 1.5 / camera.aspect);
+    camera.position.set(цель.x + дист * Math.cos(высота) * Math.cos(азимут),
+                        цель.y + дист * Math.cos(высота) * Math.sin(азимут),
+                        цель.z + дист * Math.sin(высота));
+    camera.up.set(0, 0, 1); camera.lookAt(цель);
+    renderer.render(scene, camera);
+    requestAnimationFrame(tick);
+  }
+
+  // часть может ссылаться на такую же у другого варианта ("как": [вариант, часть]) — один корпус на все кнопки
+  function связать() {
+    ВАРИАНТЫ.forEach(function (d) { d["части"].forEach(function (ч) {
+      if (!ч["как"]) return;
+      var s = ВАРИАНТЫ[ч["как"][0]]["части"][ч["как"][1]];
+      ч._pos = s._pos; ч._idx = s._idx; ч._nrm = s._nrm; ч["шаг"] = s["шаг"]; ч["биты_индексов"] = s["биты_индексов"];
+    }); });
+  }
+
+  // второй этап: подробные корпус и подставка догружаются фоном и подменяют облегчённые — облегчённую уже можно
+  // крутить (Сергей, 05.10.2026: «с каждой новой ссылкой смотрелка грузится всё дольше»). Подробные — по файлу на
+  // вариант: сначала те, что нужны показанному, остальные — следом; переключили вариант — его файлы вперёд очереди
+  var надпись = document.getElementById("load");
+  var бины = (ДАННЫЕ["полные"] || []).map(function (p) { return { файл: p["файл"], байт: p["байт"], получено: 0, готов: false, ошибка: false }; });
+  function частьБин(ч) {
+    if (ч["полная"]) return ч["полная"]["бин"];
+    if (ч["как"]) { var s = ВАРИАНТЫ[ч["как"][0]]["части"][ч["как"][1]]; return s["полная"] ? s["полная"]["бин"] : null; }
+    return null;
+  }
+  function нужные(i) {
+    var out = [];
+    ВАРИАНТЫ[i]["части"].forEach(function (ч) { var b = частьБин(ч); if (b != null && out.indexOf(b) < 0) out.push(b); });
+    return out;
+  }
+  function обновитьНадпись() {
+    var н = нужные(текущий).map(function (k) { return бины[k]; }).filter(function (b) { return !b.готов && !b.ошибка; });
+    if (!н.length) { if (!надпись.dataset.ошибка) надпись.hidden = true; return; }
+    var всего = 0, получено = 0;
+    н.forEach(function (b) { всего += b.байт; получено += b.получено; });
+    надпись.hidden = false;
+    надпись.textContent = "Подробная модель: " + Math.min(99, Math.floor(получено / всего * 100)) + " %";
+  }
+  function грузитьБин(k) {
+    var бин = бины[k];
+    return fetch(бин.файл).then(function (r) {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      if (!r.body || !r.body.getReader) return r.arrayBuffer();
+      var буфер = new Uint8Array(бин.байт), чтец = r.body.getReader();
+      function кусок() {
+        return чтец.read().then(function (x) {
+          if (x.done) return буфер.buffer;
+          if (бин.получено + x.value.length > буфер.length) {
+            var б = new Uint8Array(бин.получено + x.value.length); б.set(буфер); буфер = б;
+          }
+          буфер.set(x.value, бин.получено); бин.получено += x.value.length; обновитьНадпись();
+          return кусок();
+        });
+      }
+      return кусок();
+    }).then(function (buf) {
+      if (buf.byteLength < бин.байт) throw new Error("файл неполный");
+      var ждать = [];
+      ВАРИАНТЫ.forEach(function (d) { d["части"].forEach(function (ч) {
+        var f = ч["полная"];
+        if (!f || f["бин"] !== k) return;
+        function часть(n) { return f[n] ? распаковать1(buf.slice(f[n][0], f[n][0] + f[n][1])) : Promise.resolve(undefined); }
+        ждать.push(Promise.all([часть("позиции"), часть("индексы"), часть("нормали")]).then(function (r) {
+          return { ч: ч, f: f, r: r };
+        }));
+      }); });
+      return Promise.all(ждать);
+    }).then(function (готово) {
+      // подмена разом, когда распакованы все части файла
+      готово.forEach(function (g) {
+        g.ч._pos = g.r[0]; g.ч._idx = g.r[1]; g.ч._nrm = g.r[2];
+        g.ч["шаг"] = g.f["шаг"]; g.ч["биты_индексов"] = g.f["биты_индексов"];
+      });
+      связать();
+      бин.готов = true;
+    });
+  }
+  var занят = false;
+  function следующий() {
+    if (занят) return;
+    var очередь = нужные(текущий).concat(бины.map(function (_, k) { return k; }));
+    var k = очередь.filter(function (j) { return !бины[j].готов && !бины[j].ошибка; })[0];
+    обновитьНадпись();
+    if (k == null) return;
+    занят = true;
+    грузитьБин(k).then(function () {
+      занят = false;
+      var н = нужные(текущий);
+      if (н.indexOf(k) >= 0 && н.every(function (j) { return бины[j].готов || бины[j].ошибка; })) { показать(текущий); перекрасить(); }
+      следующий();
+    }).catch(function (e) {
+      занят = false; бины[k].ошибка = true;
+      if (нужные(текущий).indexOf(k) >= 0) {
+        надпись.hidden = false; надпись.dataset.ошибка = "1";
+        надпись.textContent = "Подробная модель не загрузилась — показана упрощённая";
+        setTimeout(function () { delete надпись.dataset.ошибка; обновитьНадпись(); }, 8000);
+      }
+      следующий();
+    });
+  }
+
+  if (ВАРИАНТЫ.length) {
+    var все = [];
+    ВАРИАНТЫ.forEach(function (d) { d["части"].forEach(function (ч) { if (!ч["как"]) все.push(распаковать(ч)); }); });
+    Promise.all(все).then(function () {
+      связать();
+      показать(ДАННЫЕ["начать_с"] != null ? ДАННЫЕ["начать_с"] : ВАРИАНТЫ.length - 1);
+      перекрасить(); tick();
+      следующий();
+    }).catch(function (e) { надпись.hidden = true; document.getElementById("desc").textContent = "Модель не распаковалась: " + e; });
+  } else { надпись.hidden = true; document.getElementById("desc").textContent = "Модель не загрузилась."; }
+})();
+</script>
