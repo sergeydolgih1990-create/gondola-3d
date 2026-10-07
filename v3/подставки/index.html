@@ -90,6 +90,8 @@
   <div class="toggles">
     <label><input type="checkbox" id="dims" autocomplete="off"> размеры</label>
     <label><input type="checkbox" id="spin"> автоповорот</label>
+    <label><input type="checkbox" id="ghost" autocomplete="off"> гондола прозрачная</label>
+    <label><input type="checkbox" id="nohull" autocomplete="off"> без гондолы</label>
   </div>
 
   <dl class="facts" id="facts"></dl>
@@ -99,7 +101,7 @@
 </div>
 
 <script src="three.min.js"></script>
-<script src="gondola-data.js?v=074bef4a"></script>
+<script src="gondola-data.js?v=fba348f8"></script>
 <script>
 (function () {
   var ДАННЫЕ = window.ГОНДОЛА || { варианты: [] };
@@ -114,6 +116,8 @@
   var ВАРИАНТЫ = ДАННЫЕ["варианты"];
   // размеры при открытии и обновлении страницы выключены — только галочкой (Сергей, 27.09)
   document.getElementById("dims").checked = false;
+  document.getElementById("ghost").checked = false;
+  document.getElementById("nohull").checked = false;
 
   var canvas = document.getElementById("c");
   var renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
@@ -196,6 +200,19 @@
   }
   function обновитьРазмеры() { размеры.visible = document.getElementById("dims").checked; }
   document.getElementById("dims").addEventListener("change", обновитьРазмеры);
+  // гондола (корпус и ферро) — прозрачная или скрыта, чтобы рассмотреть подставку (Сергей, 07.10.2026)
+  var ЛОДКА = { "корпус": 1, "ферро": 1 };
+  function обновитьЛодку() {
+    if (!модель) return;
+    var прозрачная = document.getElementById("ghost").checked, скрыть = document.getElementById("nohull").checked;
+    модель.children.forEach(function (m) {
+      if (!ЛОДКА[m.userData.имя]) return;
+      m.visible = !скрыть;
+      m.material.transparent = прозрачная; m.material.opacity = прозрачная ? 0.28 : 1;
+      m.material.depthWrite = !прозрачная; m.material.needsUpdate = true;
+    });
+  }
+  ["ghost", "nohull"].forEach(function (id) { document.getElementById(id).addEventListener("change", обновитьЛодку); });
 
   var модель = null, центр = [0, 0, 20], текущий = 0;
   function показать(i) {
@@ -205,7 +222,7 @@
     модель = new THREE.Group();
     d["части"].forEach(function (ч) {
       var m = new THREE.Mesh(geometryFrom(ч), материал(ч));
-      m.userData.роль = ч["роль"];
+      m.userData.роль = ч["роль"]; m.userData.имя = ч["имя"];
       модель.add(m);
     });
     scene.add(модель);
@@ -214,7 +231,7 @@
       og.traverse(function (o) { if (o.geometry) o.geometry.dispose(); if (o.material && o.material !== линииМат) { if (o.material.map) o.material.map.dispose(); o.material.dispose(); } });
     }
     (d["размеры"] || []).forEach(function (r) { размеры.add(размер(r)); });
-    обновитьРазмеры();
+    обновитьРазмеры(); обновитьЛодку();
     центр = d["центр"] || центр;
     grid.position.set(центр[0], центр[1], d["стол"] || 0);
     document.getElementById("facts").innerHTML = (d["факты"] || []).map(function (f) { return "<div><dt>" + f[0] + "</dt><dd>" + f[1] + "</dd></div>"; }).join("");
