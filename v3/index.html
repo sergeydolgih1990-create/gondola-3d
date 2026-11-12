@@ -45,7 +45,7 @@
   .load { position: absolute; right: 12px; top: 10px; font-family: "IBM Plex Mono", ui-monospace, monospace;
           font-size: 12px; letter-spacing: 0.03em; color: var(--muted); pointer-events: none;
           background: color-mix(in srgb, var(--panel) 82%, transparent); padding: 3px 8px; border-radius: 2px; }
-  .load[hidden] { display: none; }
+  .load[hidden], .hint[hidden] { display: none; }
   .toggles { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; color: var(--muted); }
   .toggles label { display: flex; gap: 6px; align-items: center; cursor: pointer; }
   .facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); background: var(--panel);
@@ -67,6 +67,7 @@
     <span class="label">Модель</span>
     <button type="button" data-model="gondola" aria-pressed="true" disabled>Гондола</button>
     <button type="button" data-model="gnome" aria-pressed="false" disabled>Гномик</button>
+    <button type="button" data-model="rabbit-machining" aria-pressed="false" disabled>Заяц · без кольца</button>
     <button type="button" data-model="rabbit" aria-pressed="false" disabled>Заяц · обычная сетка</button>
     <button type="button" data-model="rabbit-smart" aria-pressed="false" disabled>Заяц · умная сетка</button>
   </div>
@@ -85,6 +86,7 @@
     <button type="button" data-view="top">сверху</button>
     <button type="button" data-view="front">с носа</button>
     <button type="button" data-view="bow">нос крупно</button>
+    <button type="button" data-view="ears" hidden>уши крупно</button>
     <button type="button" data-view="stern">корма крупно</button>
   </div>
 
@@ -123,6 +125,7 @@
   var кнопкиМоделей = document.querySelectorAll("[data-model]");
   var модели = {
     gnome: { файл: "gnome-data.json?v=20261110-45-f32", тип: "гномик", имя: "Гномик" },
+    "rabbit-machining": { файл: "Заяц-без-кольца.json?v=20261112", тип: "rabbit-machining", имя: "Заяц без кольца" },
     rabbit: { файл: "Заяц-обычная-сетка.json?v=20261112", тип: "rabbit", имя: "Заяц" },
     "rabbit-smart": { файл: "Заяц-умная-сетка.json?v=20261112", тип: "rabbit-smart", имя: "Заяц" }
   };
@@ -281,13 +284,14 @@
                   "front": [0.0, 0.12, 230, null], "bow": [-0.9, 0.22, 90, "нос"], "stern": [-2.4, 0.3, 90, "корма"] };
   var РАКУРСЫ_ГНОМА = {
     "34": [-1.10, 0.12, 550], "side": [0, 0.03, 530], "top": [-1.57, 1.40, 530],
-    "front": [-Math.PI/2, 0, 520], "bow": [-1.27, 0.08, 294, "лицо"], "stern": [Math.PI/2, 0, 520]
+    "front": [-Math.PI/2, 0, 520], "bow": [-1.27, 0.08, 294, "лицо"], "stern": [Math.PI/2, 0, 520],
+    "ears": [-1.42, 0.24, 128, "уши"]
   };
   function этоФигурка(d) {
     return d["тип"] === "гномик" || этоЗаяц(d);
   }
   function этоЗаяц(d) {
-    return d["тип"] === "rabbit" || d["тип"] === "rabbit-smart";
+    return d["тип"] === "rabbit" || d["тип"] === "rabbit-smart" || d["тип"] === "rabbit-machining";
   }
   var цельКрупно = null;
   function ракурс(имя) {
@@ -552,16 +556,22 @@
       if (выбраннаяМодель !== имя) return;
       var данные = ВАРИАНТЫ[запись ? запись.индекс : вариантГондолы];
       var заяц = этоЗаяц(данные);
-      var сохранитьРакурс = заяц && этоЗаяц(ВАРИАНТЫ[текущий]);
+      var рабочийЗаяц = имя === "rabbit-machining";
+      var текущаяМодель = ВАРИАНТЫ[текущий];
+      var сохранитьРакурс = заяц && этоЗаяц(текущаяМодель) &&
+        рабочийЗаяц === (текущаяМодель["тип"] === "rabbit-machining");
       ошибкаМодели.hidden = true;
       document.getElementById("variants").hidden = !!запись;
-      document.getElementById("dims").closest("label").hidden = заяц;
-      if (заяц) document.getElementById("dims").checked = false;
-      hemi.intensity = запись ? 0.95 : 0.7;
+      document.querySelector('[data-view="ears"]').hidden = !рабочийЗаяц;
+      document.getElementById("dims").closest("label").hidden = заяц && !рабочийЗаяц;
+      if (заяц && !сохранитьРакурс) document.getElementById("dims").checked = false;
+      document.querySelector(".hint").hidden = рабочийЗаяц;
+      hemi.intensity = рабочийЗаяц ? 0.70 : запись ? 0.95 : 0.7;
       key.intensity = запись ? 0.64 : 0.9;
       кнопкиМоделей.forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.model === имя ? "true" : "false"); });
-      var заголовки = заяц
-        ? ["Заяц — пробная 3D-модель", данные["подпись"], "Исходная форма с кольцом между ушами."]
+      var заголовки = рабочийЗаяц
+        ? ["Заяц — модель без кольца", "Высота 240 мм, ширина по рукам 75 мм.", ""]
+        : заяц ? ["Заяц — пробная 3D-модель", данные["подпись"], "Исходная форма с кольцом между ушами."]
         : запись ? ["Гномик — пробная 3D-модель", "Деревянная ёлочная игрушка по референсу. Два установа с переворотом.", "Габариты предварительные. Модель для согласования формы."] : [ШАПКА.h1, ШАПКА.lead, ШАПКА.note];
       ["t-h1", "t-lead", "t-note"].forEach(function (id, k) { document.getElementById(id).textContent = заголовки[k] || ""; });
       document.title = запись ? запись.имя + " — 3D-модель" : ШАПКА.title;
@@ -569,9 +579,9 @@
       Object.keys(виды).forEach(function (ключ) { document.querySelector('[data-view="'+ключ+'"]').textContent = виды[ключ]; });
       var цвет = document.querySelector('[data-wood="light"]');
       цвет.textContent = запись ? "по макету" : "светлое дерево";
-      цвет.hidden = имя === "rabbit-smart";
+      цвет.hidden = имя === "rabbit-smart" || рабочийЗаяц;
       document.querySelector('[data-wood="dark"]').textContent = запись ? "без росписи" : "морёный дуб";
-      if (заяц && !сохранитьРакурс) {
+      if (заяц && !этоЗаяц(текущаяМодель)) {
         деревоДоЗайца = дерево;
         дерево = "gray";
       }
