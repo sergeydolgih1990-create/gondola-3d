@@ -29,7 +29,7 @@
           max-width: 1180px; margin: 0 auto; box-sizing: border-box; }
   header h1 { font-size: 21px; font-weight: 600; margin: 0 0 4px; text-wrap: balance; }
   header p { margin: 0; color: var(--muted); font-size: 14px; max-width: 72ch; }
-  .row[hidden] { display: none; }
+  .row[hidden], .row > [hidden], .toggles > [hidden] { display: none; }
   .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
   .row .label { font-size: 13px; color: var(--muted); margin-right: 2px; min-width: 64px; }
   .row button { font: inherit; font-size: 14px; padding: 7px 13px; border: 1px solid var(--line); border-radius: 3px;
@@ -67,6 +67,8 @@
     <span class="label">Модель</span>
     <button type="button" data-model="gondola" aria-pressed="true" disabled>Гондола</button>
     <button type="button" data-model="gnome" aria-pressed="false" disabled>Гномик</button>
+    <button type="button" data-model="rabbit" aria-pressed="false" disabled>Заяц · обычная сетка</button>
+    <button type="button" data-model="rabbit-smart" aria-pressed="false" disabled>Заяц · умная сетка</button>
   </div>
   <div class="row" id="variants" role="group" aria-label="Вариант"></div>
 
@@ -119,7 +121,12 @@
   }
   var ВАРИАНТЫ = ДАННЫЕ["варианты"];
   var кнопкиМоделей = document.querySelectorAll("[data-model]");
-  var гномик = -1, вариантГондолы = 0, выбраннаяМодель = "gondola", запросГномика;
+  var модели = {
+    gnome: { файл: "gnome-data.json?v=20261110-45-f32", тип: "гномик", имя: "Гномик" },
+    rabbit: { файл: "Заяц-обычная-сетка.json?v=20261112", тип: "rabbit", имя: "Заяц" },
+    "rabbit-smart": { файл: "Заяц-умная-сетка.json?v=20261112", тип: "rabbit-smart", имя: "Заяц" }
+  };
+  var вариантГондолы = 0, выбраннаяМодель = "gondola";
   var ошибкаМодели = document.createElement("p");
   ошибкаМодели.className = "note";
   ошибкаМодели.setAttribute("role","status");
@@ -146,11 +153,11 @@
   var РОЛИ = { "латунь": [0xc9a24a, 0.32, 0.55], "металлостикер": [0xd9d6cf, 0.3, 0.4] };
   // подставка — своим тоном, контрастно к лодке (Сергей, 02.10: «подставка того же цвета, что и лодка»)
   var ПОДСТАВКА = { light: [0x5c4130, 0.6], dark: [0xcdb08a, 0.62], gray: [0x6d5848, 0.65] };
-  var дерево = "light";
+  var дерево = "light", деревоДоЗайца = дерево;
   function тон(r) { return r === "подставка" ? ПОДСТАВКА[дерево] : ДЕРЕВО[дерево]; }
   function материал(ч) {
     var r = ч["роль"], c, rough, metal = 0;
-    if (r === "гномик") return new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.81 });
+    if (r === "гномик" || r === "заяц") return new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: !!ч._col, roughness: 0.81, side: r === "заяц" ? THREE.DoubleSide : THREE.FrontSide });
     if (РОЛИ[r]) { c = РОЛИ[r][0]; rough = РОЛИ[r][1]; metal = РОЛИ[r][2]; }
     else { c = тон(r)[0]; rough = тон(r)[1]; }
     return new THREE.MeshStandardMaterial({ color: c, roughness: rough, metalness: metal });
@@ -246,8 +253,8 @@
   function перекрасить() {
     if (!модель) return;
     модель.children.forEach(function (m) {
-      if (m.userData.роль === "гномик") {
-        var поМакету = дерево === "light";
+      if (m.userData.роль === "гномик" || m.userData.роль === "заяц") {
+        var поМакету = дерево === "light" && !!m.geometry.getAttribute("color");
         m.material.vertexColors = поМакету;
         m.material.color.setHex(поМакету ? 0xffffff : дерево === "gray" ? ДЕРЕВО.gray[0] : ДЕРЕВО.light[0]);
         m.material.needsUpdate = true;
@@ -276,9 +283,15 @@
     "34": [-1.10, 0.12, 550], "side": [0, 0.03, 530], "top": [-1.57, 1.40, 530],
     "front": [-Math.PI/2, 0, 520], "bow": [-1.27, 0.08, 294, "лицо"], "stern": [Math.PI/2, 0, 520]
   };
+  function этоФигурка(d) {
+    return d["тип"] === "гномик" || этоЗаяц(d);
+  }
+  function этоЗаяц(d) {
+    return d["тип"] === "rabbit" || d["тип"] === "rabbit-smart";
+  }
   var цельКрупно = null;
   function ракурс(имя) {
-    var r = (текущий === гномик ? РАКУРСЫ_ГНОМА : РАКУРСЫ)[имя];
+    var r = (этоФигурка(ВАРИАНТЫ[текущий]) ? РАКУРСЫ_ГНОМА : РАКУРСЫ)[имя];
     азимут = r[0]; высота = r[1]; дистанция = r[2];
     var d = ВАРИАНТЫ[текущий];
     цельКрупно = r[3] && d["точки"] ? d["точки"][r[3]] : null;
@@ -402,7 +415,7 @@
     var c = цельКрупно || центр;
     цель.set(c[0], c[1], c[2]).add(сдвиг);
     // узкий экран (телефон): длинная лодка не влезает по ширине — камера отходит дальше
-    var дист = дистанция * Math.max(1, (текущий === гномик ? 0.85 : 1.5) / camera.aspect);
+    var дист = дистанция * Math.max(1, (этоФигурка(ВАРИАНТЫ[текущий]) ? 0.85 : 1.5) / camera.aspect);
     camera.position.set(цель.x + дист * Math.cos(высота) * Math.cos(азимут),
                         цель.y + дист * Math.cos(высота) * Math.sin(азимут),
                         цель.z + дист * Math.sin(высота));
@@ -506,61 +519,76 @@
     });
   }
 
-  function загрузитьГномика() {
-    if (!запросГномика) {
-      запросГномика = fetch("gnome-data.json?v=20261110-45-f32").then(function (r) {
+  function загрузитьМодель(модель) {
+    if (!модель.запрос) {
+      модель.запрос = fetch(модель.файл).then(function (r) {
         if (!r.ok) throw new Error("HTTP " + r.status);
         return r.json();
       }).then(function (d) {
-        if (d["тип"] !== "гномик" || !d["части"].length) throw new Error("Неверный файл модели");
-        d["точки"] = { "лицо": [0, 0, 101] };
+        if (d["тип"] !== модель.тип || !d["части"].length) throw new Error("Неверный файл модели");
+        if (модель.тип === "гномик") d["точки"] = { "лицо": [0, 0, 101] };
         return Promise.all(d["части"].map(распаковать)).then(function () {
-          гномик = ВАРИАНТЫ.push(d) - 1;
+          модель.индекс = ВАРИАНТЫ.push(d) - 1;
         });
       }).catch(function (error) {
-        запросГномика = null;
+        модель.запрос = null;
         throw error;
       });
     }
-    return запросГномика;
+    return модель.запрос;
   }
 
   function выбратьМодель(имя, менятьАдрес) {
     выбраннаяМодель = имя;
     ошибкаМодели.hidden = true;
-    var этоГном = имя === "gnome";
-    if (этоГном && текущий !== гномик) вариантГондолы = текущий;
-    var готово = этоГном ? загрузитьГномика() : Promise.resolve();
-    if (этоГном && гномик < 0) {
-      ошибкаМодели.textContent = "Загружается гномик…";
+    var запись = модели[имя];
+    if (запись && !этоФигурка(ВАРИАНТЫ[текущий])) вариантГондолы = текущий;
+    var готово = запись ? загрузитьМодель(запись) : Promise.resolve();
+    if (запись && запись.индекс === undefined) {
+      ошибкаМодели.textContent = "Загружается модель…";
       ошибкаМодели.hidden = false;
     }
     готово.then(function () {
       if (выбраннаяМодель !== имя) return;
+      var данные = ВАРИАНТЫ[запись ? запись.индекс : вариантГондолы];
+      var заяц = этоЗаяц(данные);
+      var сохранитьРакурс = заяц && этоЗаяц(ВАРИАНТЫ[текущий]);
       ошибкаМодели.hidden = true;
-      document.getElementById("variants").hidden = этоГном;
-      hemi.intensity = этоГном ? 0.95 : 0.7;
-      key.intensity = этоГном ? 0.64 : 0.9;
+      document.getElementById("variants").hidden = !!запись;
+      document.getElementById("dims").closest("label").hidden = заяц;
+      if (заяц) document.getElementById("dims").checked = false;
+      hemi.intensity = запись ? 0.95 : 0.7;
+      key.intensity = запись ? 0.64 : 0.9;
       кнопкиМоделей.forEach(function (b) { b.setAttribute("aria-pressed", b.dataset.model === имя ? "true" : "false"); });
-      var заголовки = этоГном ? ["Гномик — пробная 3D-модель", "Деревянная ёлочная игрушка по референсу. Два установа с переворотом.", "Габариты предварительные. Модель для согласования формы."] : [ШАПКА.h1, ШАПКА.lead, ШАПКА.note];
+      var заголовки = заяц
+        ? ["Заяц — пробная 3D-модель", данные["подпись"], "Исходная форма с кольцом между ушами."]
+        : запись ? ["Гномик — пробная 3D-модель", "Деревянная ёлочная игрушка по референсу. Два установа с переворотом.", "Габариты предварительные. Модель для согласования формы."] : [ШАПКА.h1, ШАПКА.lead, ШАПКА.note];
       ["t-h1", "t-lead", "t-note"].forEach(function (id, k) { document.getElementById(id).textContent = заголовки[k] || ""; });
-      document.title = этоГном ? "Гномик — 3D-модель" : ШАПКА.title;
-      var виды = этоГном ? {front:"лицо",bow:"лицо крупно",stern:"спина"} : {front:"с носа",bow:"нос крупно",stern:"корма крупно"};
+      document.title = запись ? запись.имя + " — 3D-модель" : ШАПКА.title;
+      var виды = запись ? {front:"лицо",bow:"лицо крупно",stern:"спина"} : {front:"с носа",bow:"нос крупно",stern:"корма крупно"};
       Object.keys(виды).forEach(function (ключ) { document.querySelector('[data-view="'+ключ+'"]').textContent = виды[ключ]; });
-      document.querySelector('[data-wood="light"]').textContent = этоГном ? "по макету" : "светлое дерево";
-      document.querySelector('[data-wood="dark"]').textContent = этоГном ? "без росписи" : "морёный дуб";
-      показать(этоГном ? гномик : вариантГондолы);
-      ракурс("34");
+      var цвет = document.querySelector('[data-wood="light"]');
+      цвет.textContent = запись ? "по макету" : "светлое дерево";
+      цвет.hidden = имя === "rabbit-smart";
+      document.querySelector('[data-wood="dark"]').textContent = запись ? "без росписи" : "морёный дуб";
+      if (заяц && !сохранитьРакурс) {
+        деревоДоЗайца = дерево;
+        дерево = "gray";
+      }
+      if (!заяц && этоЗаяц(ВАРИАНТЫ[текущий])) дерево = деревоДоЗайца;
+      if (цвет.hidden && дерево === "light") дерево = "gray";
+      показать(запись ? запись.индекс : вариантГондолы);
+      if (!сохранитьРакурс) ракурс("34");
       перекрасить();
       обновитьНадпись();
       if (менятьАдрес) {
         var адрес = new URL(location.href);
-        if (этоГном) адрес.searchParams.set("model","gnome"); else адрес.searchParams.delete("model");
+        if (запись) адрес.searchParams.set("model", имя); else адрес.searchParams.delete("model");
         history.replaceState(null,"",адрес);
       }
     }).catch(function () {
       if (выбраннаяМодель !== имя) return;
-      ошибкаМодели.textContent = "Гномик не загрузился. Нажмите кнопку ещё раз.";
+      ошибкаМодели.textContent = "Модель не загрузилась. Нажмите кнопку ещё раз.";
       ошибкаМодели.hidden = false;
     });
   }
@@ -576,7 +604,8 @@
         b.disabled = false;
         b.addEventListener("click", function () { выбратьМодель(b.dataset.model, true); });
       });
-      if (new URLSearchParams(location.search).get("model") === "gnome") выбратьМодель("gnome", false);
+      var изАдреса = new URLSearchParams(location.search).get("model");
+      if (Object.hasOwn(модели, изАдреса)) выбратьМодель(изАдреса, false);
       перекрасить(); tick();
       следующий();
     }).catch(function (e) { надпись.hidden = true; document.getElementById("desc").textContent = "Модель не распаковалась: " + e; });
